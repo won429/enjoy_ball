@@ -192,6 +192,13 @@
                             </div>
                             
                             <div class="flex flex-col gap-2 mb-3 bg-black/20 p-2.5 rounded-xl border border-white/5">
+                                <!-- 🔥 추가된 링크 자동입력 영역 🔥 -->
+                                <div class="flex items-center gap-1.5 mb-1 border-b border-white/5 pb-2">
+                                    <input type="text" id="link-input-${match.id}" placeholder="네이버 스포츠 등 중계 링크 붙여넣기" class="flex-1 bg-black/50 text-white text-[10px] sm:text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
+                                    <button id="btn-ai-link-${match.id}" onclick="processLinkSync(${match.id}, '${match.team1}', '${match.team2}')" class="bg-teal-600/80 hover:bg-teal-500 text-white text-[10px] font-bold py-1 px-2 rounded shadow flex items-center gap-1 active:scale-95 transition-all shrink-0">
+                                        <i class="fa-solid fa-rotate"></i> 링크 자동입력
+                                    </button>
+                                </div>
                                 <div class="flex justify-end mb-0.5">
                                     <input type="file" id="file-${match.id}" accept="image/*" class="hidden" onchange="processLineupImage(event, ${match.id}, '${match.team1}', '${match.team2}')">
                                     <button id="btn-ai-${match.id}" onclick="document.getElementById('file-${match.id}').click()" class="bg-indigo-600/80 hover:bg-indigo-500 text-white text-[10px] font-bold py-1 px-2.5 rounded shadow flex items-center gap-1 active:scale-95 transition-all">
@@ -292,8 +299,8 @@
         }
 
         // 🔥 모달 제어 함수들 🔥
-        function openApiKeyModal(file, matchId, team1, team2) {
-            pendingAiTask = { file, matchId, team1, team2 };
+        function openApiKeyModal(taskType, payload, matchId, team1, team2) {
+            pendingAiTask = { type: taskType, payload: payload, matchId: matchId, team1: team1, team2: team2 };
             document.getElementById('api-key-input').value = '';
             const modal = document.getElementById('api-key-modal');
             modal.classList.remove('hidden');
@@ -321,7 +328,11 @@
             modal.classList.add('hidden');
             
             if (pendingAiTask) {
-                executeAiProcess(pendingAiTask.file, pendingAiTask.matchId, pendingAiTask.team1, pendingAiTask.team2, key);
+                if (pendingAiTask.type === 'image') {
+                    executeAiProcess(pendingAiTask.payload, pendingAiTask.matchId, pendingAiTask.team1, pendingAiTask.team2, key);
+                } else if (pendingAiTask.type === 'link') {
+                    executeLinkSyncProcess(pendingAiTask.payload, pendingAiTask.matchId, pendingAiTask.team1, pendingAiTask.team2, key);
+                }
                 pendingAiTask = null;
             }
         }
@@ -334,15 +345,160 @@
             let apiKey = localStorage.getItem('kbo_gemini_api_key');
             
             if (!apiKey) {
-                // 키가 없으면 커스텀 모달 오픈
-                openApiKeyModal(file, matchId, team1, team2);
-                event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+                openApiKeyModal('image', file, matchId, team1, team2);
+                event.target.value = ''; 
                 return;
             }
             
-            // 키가 이미 있으면 곧바로 AI 처리
             executeAiProcess(file, matchId, team1, team2, apiKey);
-            event.target.value = ''; // 초기화
+            event.target.value = ''; 
+        }
+
+        // 🔥 링크 동기화 버튼 클릭 시 실행되는 함수 🔥
+        async function processLinkSync(matchId, team1, team2) {
+            const urlInput = document.getElementById(`link-input-${matchId}`).value.trim();
+            if (!urlInput) {
+                showToast('네이버 스포츠 등 중계 링크를 입력해주세요.');
+                return;
+            }
+
+            let apiKey = localStorage.getItem('kbo_gemini_api_key');
+            if (!apiKey) {
+                openApiKeyModal('link', urlInput, matchId, team1, team2);
+                return;
+            }
+
+            executeLinkSyncProcess(urlInput, matchId, team1, team2, apiKey);
+        }
+
+        // 🔥 링크 크롤링 및 실시간 AI 데이터 추출 로직 🔥
+        async function executeLinkSyncProcess(urlStr, matchId, team1, team2, apiKey) {
+            const btn = document.getElementById(`btn-ai-link-${matchId}`);
+            const originalBtnHtml = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 추출중...`;
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            showToast('웹페이지에서 실시간 데이터를 읽고 있습니다... 📡');
+
+            try {
+                // 브라우저 보안(CORS) 우회를 위해 무료 프록시 서버 사용
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlStr)}`;
+                const proxyRes = await fetch(proxyUrl);
+                const proxyData = await proxyRes.json();
+                
+                if (!proxyData.contents) {
+                    throw new Error("웹페이지를 읽어올 수 없습니다. 유효한 중계 링크인지 확인해주세요.");
+                }
+
+                // AI 토큰 낭비를 막고 텍스트만 쏙 빼내기
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(proxyData.contents, 'text/html');
+                doc.querySelectorAll('script, style, img, svg, iframe, noscript').forEach(el => el.remove());
+                const textContent = doc.body.innerText.replace(/\s+/g, ' ').trim().substring(0, 15000); 
+
+                const promptText = `다음은 KBO 야구 중계 페이지의 추출된 텍스트야. 여기서 ${team1}과(와) ${team2}의 실시간 경기 정보를 정확히 추출해줘.
+텍스트 데이터:
+${textContent}
+
+반드시 아래 JSON 구조로만 반환해 (마크다운 백틱은 사용 금지, 오직 JSON만 반환).
+아직 정보가 없다면 기본값이나 빈 문자열을 넣어줘.
+{
+  "gameStatus": "경기전, 경기중, 종료, 우취 중 하나",
+  "inning": "진행 중인 이닝 (예: 3회초, 5회말. 경기전/종료면 빈문자열)",
+  "awayScore": ${team1}의 현재 점수 (숫자만, 없으면 0),
+  "homeScore": ${team2}의 현재 점수 (숫자만, 없으면 0),
+  "awayPitcher": "${team1} 선발투수 이름",
+  "homePitcher": "${team2} 선발투수 이름",
+  "awayLineup": "${team1} 선발타자 1번~9번 이름 (쉼표로 구분)",
+  "homeLineup": "${team2} 선발타자 1번~9번 이름 (쉼표로 구분)"
+}`;
+
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: promptText }] }],
+                    generationConfig: { responseMimeType: "application/json", temperature: 0.1 } // 정확도 극대화를 위해 온도 조절
+                };
+
+                const fallbackModels = [
+                    "gemini-1.5-flash-latest",
+                    "gemini-1.5-flash",
+                    "gemini-2.5-flash",
+                    "gemini-pro"
+                ];
+
+                let result = null;
+                let lastErrorMessage = "";
+
+                for (const model of fallbackModels) {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    
+                    const fetchWithBackoff = async () => {
+                        const delays = [1000, 2000, 4000]; 
+                        for (let i = 0; i < 3; i++) {
+                            try {
+                                const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                if (res.ok) return await res.json();
+                                const errText = await res.text();
+                                if (res.status === 400 || res.status === 403) {
+                                    localStorage.removeItem('kbo_gemini_api_key');
+                                    throw new Error(`API 키 오류 또는 권한 없음`);
+                                } else if (res.status === 404) {
+                                    throw new Error("MODEL_NOT_FOUND");
+                                } else if (res.status === 429) {
+                                    throw new Error("구글 API 무료 할당량 초과");
+                                }
+                                throw new Error(`구글 서버 오류`);
+                            } catch (err) {
+                                if (err.name === "TypeError" && err.message.includes("fetch")) throw new Error("통신 차단됨 (광고차단기 등을 꺼주세요)");
+                                if (err.message.includes("API 키") || err.message.includes("할당량") || err.message === "MODEL_NOT_FOUND") throw err;
+                                if (i === 2) throw err;
+                            }
+                            await new Promise(r => setTimeout(r, delays[i]));
+                        }
+                    };
+
+                    try {
+                        result = await fetchWithBackoff();
+                        break;
+                    } catch (err) {
+                        if (err.message === "MODEL_NOT_FOUND") {
+                            lastErrorMessage = "사용 가능한 모델 버전을 찾을 수 없습니다.";
+                            continue;
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+
+                if (!result) throw new Error(lastErrorMessage || "AI 통신에 실패했습니다.");
+
+                let text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const data = JSON.parse(text);
+                    
+                    if (data.gameStatus) document.getElementById(`status-${matchId}`).value = data.gameStatus;
+                    if (data.inning !== undefined) document.getElementById(`inning-${matchId}`).value = data.inning;
+                    if (data.awayScore !== undefined) document.getElementById(`away-score-${matchId}`).value = data.awayScore;
+                    if (data.homeScore !== undefined) document.getElementById(`home-score-${matchId}`).value = data.homeScore;
+                    
+                    if (data.awayPitcher) document.getElementById(`away-pitcher-${matchId}`).value = data.awayPitcher;
+                    if (data.homePitcher) document.getElementById(`home-pitcher-${matchId}`).value = data.homePitcher;
+                    if (data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
+                    if (data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
+                    
+                    showToast('✅ 데이터 동기화 완료! 확인 후 [서버 저장]을 누르세요.');
+                } else {
+                    throw new Error("웹페이지에서 데이터를 찾지 못했습니다.");
+                }
+            } catch (e) {
+                console.error("Link Sync Error:", e);
+                showToast(`오류 발생: ${e.message}`);
+            } finally {
+                btn.innerHTML = originalBtnHtml;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
         }
 
         // 실질적인 AI 통신 처리 함수
