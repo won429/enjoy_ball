@@ -391,11 +391,15 @@
                     throw new Error("웹페이지를 읽어올 수 없습니다. 유효한 중계 링크인지 확인해주세요.");
                 }
 
-                // AI 토큰 낭비를 막고 텍스트만 쏙 빼내기
+                // AI 토큰 낭비를 막고 텍스트만 쏙 빼내기 (길이를 30000자로 대폭 상향)
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(proxyData.contents, 'text/html');
                 doc.querySelectorAll('script, style, img, svg, iframe, noscript').forEach(el => el.remove());
-                const textContent = doc.body.innerText.replace(/\s+/g, ' ').trim().substring(0, 15000); 
+                const textContent = doc.body.innerText.replace(/\s+/g, ' ').trim().substring(0, 30000); 
+
+                if (textContent.length < 50) {
+                    throw new Error("링크 보안 차단으로 내용을 읽을 수 없습니다. (모바일 버전 링크 m.sports.naver.com을 시도해보세요)");
+                }
 
                 const promptText = `다음은 KBO 야구 중계 페이지의 추출된 텍스트야. 여기서 ${team1}과(와) ${team2}의 실시간 경기 정보를 정확히 추출해줘.
 텍스트 데이터:
@@ -416,14 +420,14 @@ ${textContent}
 
                 const payload = {
                     contents: [{ role: "user", parts: [{ text: promptText }] }],
-                    generationConfig: { responseMimeType: "application/json", temperature: 0.1 } // 정확도 극대화를 위해 온도 조절
+                    generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
                 };
 
+                // 🔥 에러를 일으키는 구형 모델(gemini-pro) 제거, 최신 호환 모델만 유지 🔥
                 const fallbackModels = [
                     "gemini-1.5-flash-latest",
                     "gemini-1.5-flash",
-                    "gemini-2.5-flash",
-                    "gemini-pro"
+                    "gemini-2.5-flash"
                 ];
 
                 let result = null;
@@ -438,11 +442,13 @@ ${textContent}
                             try {
                                 const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                                 if (res.ok) return await res.json();
+                                
                                 const errText = await res.text();
-                                if (res.status === 400 || res.status === 403) {
+                                // 🔥 400 에러일 때 키를 삭제하지 않고 다음 모델로 안전하게 넘어가도록 완벽 수정 🔥
+                                if (res.status === 401 || res.status === 403) {
                                     localStorage.removeItem('kbo_gemini_api_key');
                                     throw new Error(`API 키 오류 또는 권한 없음`);
-                                } else if (res.status === 404) {
+                                } else if (res.status === 404 || res.status === 400) {
                                     throw new Error("MODEL_NOT_FOUND");
                                 } else if (res.status === 429) {
                                     throw new Error("구글 API 무료 할당량 초과");
@@ -531,12 +537,11 @@ ${textContent}
                         generationConfig: { responseMimeType: "application/json" }
                     };
 
-                    // 🔥 혁신: 실패 시 자동으로 다음 버전을 찔러보는 다중 엔진 배열 🔥
+                    // 🔥 에러를 일으키는 구형 모델 제거 및 안정화 🔥
                     const fallbackModels = [
                         "gemini-1.5-flash-latest",
                         "gemini-1.5-flash",
-                        "gemini-2.5-flash",
-                        "gemini-pro"
+                        "gemini-2.5-flash"
                     ];
 
                     let result = null;
@@ -557,11 +562,12 @@ ${textContent}
                                         const errText = await res.text();
                                         console.error(`API 오류 (상태코드: ${res.status}):`, errText);
                                         
-                                        if (res.status === 400 || res.status === 403) {
+                                        // 🔥 400 에러 처리 완벽 수정: 키 삭제 방지 🔥
+                                        if (res.status === 401 || res.status === 403) {
                                             localStorage.removeItem('kbo_gemini_api_key');
                                             throw new Error(`API 키가 잘못되었거나 권한이 없습니다.`);
-                                        } else if (res.status === 404) {
-                                            throw new Error("MODEL_NOT_FOUND"); // 다음 모델로 넘기기 위한 고의 에러
+                                        } else if (res.status === 404 || res.status === 400) {
+                                            throw new Error("MODEL_NOT_FOUND"); 
                                         } else if (res.status === 429) {
                                             throw new Error("구글 API 무료 할당량 초과");
                                         }
@@ -580,14 +586,14 @@ ${textContent}
 
                         try {
                             result = await fetchWithBackoff();
-                            break; // 성공하면 반복문 즉시 탈출 (다음 모델 찔러볼 필요 없음)
+                            break; 
                         } catch (err) {
                             if (err.message === "MODEL_NOT_FOUND") {
                                 console.warn(`[AI] ${model} 버전을 지원하지 않아 다음 버전으로 넘어갑니다.`);
                                 lastErrorMessage = "사용 가능한 모델 버전을 찾을 수 없습니다.";
-                                continue; // 404면 포기하지 않고 다음 엔진으로 넘어감
+                                continue; 
                             } else {
-                                throw err; // 권한 오류나 할당량 초과는 바로 에러 뿜고 완전 정지
+                                throw err; 
                             }
                         }
                     }
