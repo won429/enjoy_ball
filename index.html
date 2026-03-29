@@ -292,10 +292,13 @@
                         if (!apiKey) {
                             throw new Error("API_KEY_MISSING");
                         }
+                        // 실수로 들어간 공백 자동 제거
+                        apiKey = apiKey.trim();
                         localStorage.setItem('kbo_gemini_api_key', apiKey);
                     }
                     
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                    // 개인 API 키로 무조건 작동하는 범용 안정화 모델로 교체
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
                     const promptText = `이 KBO 야구 라인업 이미지에서 AWAY팀(${team1})과 HOME팀(${team2})의 선발투수와 선발타자 1~9번 라인업을 추출해줘.
 반드시 아래 JSON 구조로만 반환해 (마크다운 백틱은 사용 금지, 오직 JSON만 반환):
