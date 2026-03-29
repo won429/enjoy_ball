@@ -48,6 +48,19 @@
         </div>
         
         <div id="settings-container" class="w-full flex-1 flex flex-col gap-4"></div>
+
+        <!-- 🔥 브라우저 차단 방지용 자체 커스텀 API 키 입력 모달 🔥 -->
+        <div id="api-key-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm px-5">
+            <div class="bg-[#1C1C1E] border border-white/10 rounded-3xl p-6 w-full max-w-[400px] shadow-2xl flex flex-col gap-4 transform transition-all">
+                <h3 class="text-lg font-bold text-white"><i class="fa-solid fa-key text-point mr-2"></i>Gemini API 키 설정</h3>
+                <p class="text-[12px] text-gray-400 leading-relaxed">AI 캡처 자동입력 기능을 사용하려면 Google Gemini API 키가 필요합니다.<br>최초 1회만 입력하면 기기에 안전하게 저장됩니다.</p>
+                <input type="text" id="api-key-input" placeholder="여기에 API 키를 붙여넣으세요" class="bg-black/50 text-white border border-white/20 rounded-xl p-3.5 text-sm focus:outline-none focus:border-point w-full tracking-wider font-mono">
+                <div class="flex gap-2 mt-2">
+                    <button onclick="closeApiKeyModal()" class="flex-1 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-white font-bold py-3.5 rounded-xl transition-all active:scale-95">취소</button>
+                    <button onclick="saveApiKeyAndContinue()" class="flex-1 bg-point hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl transition-all active:scale-95">저장 및 계속</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -66,8 +79,9 @@
         let scheduleData = [];
         let liveDataStore = {}; 
         let isSettingsUnlocked = localStorage.getItem('kbo_admin_unlocked') === 'true';
+        let pendingAiTask = null; // API 키 입력 대기 시 작업을 잠시 보관할 변수
         
-        const initialScheduleData = []; // 강제 업로드용 내장 데이터 (필요시 채워넣으세요)
+        const initialScheduleData = []; // 강제 업로드용 내장 데이터
 
         let currentDate = new Date();
         const todayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
@@ -88,7 +102,7 @@
             setTimeout(() => { 
                 toast.classList.remove('opacity-100', 'translate-y-0'); 
                 toast.classList.add('opacity-0', '-translate-y-4'); 
-            }, 2500);
+            }, 3500); 
         }
 
         async function syncWithFirestore() {
@@ -240,7 +254,7 @@
                         <i class="fa-solid fa-cloud-arrow-up"></i> 내장된 전체 일정 서버로 강제 덮어쓰기
                     </button>
                     
-                    <div class="flex gap-3">
+                    <div class="flex gap-3 mb-4">
                         <button onclick="backupData()" class="flex-1 bg-green-900/40 hover:bg-green-800/60 border border-green-500/30 text-green-400 font-bold py-3 rounded-2xl active:scale-95 transition-all shadow flex items-center justify-center gap-2">
                             <i class="fa-solid fa-shield-halved"></i> DB 백업
                         </button>
@@ -248,7 +262,12 @@
                             <i class="fa-solid fa-clock-rotate-left"></i> DB 복구
                         </button>
                     </div>
-                    <p class="text-[10px] text-gray-500 text-center mt-4">백업 데이터를 복구하면 이전 상태로 되돌립니다.</p>
+                    
+                    <!-- 🔥 통신 오류 해결을 위한 API 키 수동 초기화 버튼 추가 🔥 -->
+                    <button onclick="resetApiKey()" class="w-full bg-yellow-900/40 hover:bg-yellow-800/60 border border-yellow-500/30 text-yellow-400 font-bold py-3 rounded-2xl active:scale-95 transition-all shadow flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-key"></i> 저장된 AI API 키 초기화
+                    </button>
+                    <p class="text-[10px] text-gray-500 text-center mt-4">오류 발생 시 API 키를 초기화하고 구글에서 새 키를 발급받으세요.</p>
                 </div>`;
             
             container.innerHTML = html;
@@ -266,11 +285,68 @@
             }
         }
 
+        // 🔥 수동 초기화 함수 🔥
+        function resetApiKey() {
+            localStorage.removeItem('kbo_gemini_api_key');
+            showToast('기기에 저장된 API 키가 완벽하게 삭제되었습니다. 다음 캡처 시 새 키를 입력하세요!');
+        }
+
+        // 🔥 모달 제어 함수들 🔥
+        function openApiKeyModal(file, matchId, team1, team2) {
+            pendingAiTask = { file, matchId, team1, team2 };
+            document.getElementById('api-key-input').value = '';
+            const modal = document.getElementById('api-key-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeApiKeyModal() {
+            const modal = document.getElementById('api-key-modal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+            pendingAiTask = null;
+            showToast('API 키 입력이 취소되었습니다.');
+        }
+
+        function saveApiKeyAndContinue() {
+            const key = document.getElementById('api-key-input').value.trim();
+            if (!key) {
+                showToast('API 키를 입력해주세요.');
+                return;
+            }
+            localStorage.setItem('kbo_gemini_api_key', key);
+            
+            const modal = document.getElementById('api-key-modal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+            
+            if (pendingAiTask) {
+                executeAiProcess(pendingAiTask.file, pendingAiTask.matchId, pendingAiTask.team1, pendingAiTask.team2, key);
+                pendingAiTask = null;
+            }
+        }
+
+        // 사진 올릴 때 가장 먼저 실행되는 함수
         async function processLineupImage(event, matchId, team1, team2) {
             const file = event.target.files[0];
             if (!file) return;
 
-            // 버튼 상태 변경: 로딩 중 표시
+            let apiKey = localStorage.getItem('kbo_gemini_api_key');
+            
+            if (!apiKey) {
+                // 키가 없으면 커스텀 모달 오픈
+                openApiKeyModal(file, matchId, team1, team2);
+                event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+                return;
+            }
+            
+            // 키가 이미 있으면 곧바로 AI 처리
+            executeAiProcess(file, matchId, team1, team2, apiKey);
+            event.target.value = ''; // 초기화
+        }
+
+        // 실질적인 AI 통신 처리 함수
+        async function executeAiProcess(file, matchId, team1, team2, apiKey) {
             const btn = document.getElementById(`btn-ai-${matchId}`);
             const originalBtnHtml = btn.innerHTML;
             btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 분석 진행중...`;
@@ -285,21 +361,6 @@
                     const base64String = reader.result.split(',')[1];
                     const mimeType = file.type;
                     
-                    // 🔥 깃허브 호스팅용 API 키 로컬 저장소 처리 🔥
-                    let apiKey = localStorage.getItem('kbo_gemini_api_key');
-                    if (!apiKey) {
-                        apiKey = prompt("AI 캡처 기능을 위한 Gemini API 키를 입력해주세요.\n(최초 1회만 입력하면 기기에 안전하게 자동 저장됩니다.)");
-                        if (!apiKey) {
-                            throw new Error("API_KEY_MISSING");
-                        }
-                        // 실수로 들어간 공백 자동 제거
-                        apiKey = apiKey.trim();
-                        localStorage.setItem('kbo_gemini_api_key', apiKey);
-                    }
-                    
-                    // 개인 API 키로 무조건 작동하는 범용 안정화 모델로 교체
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
                     const promptText = `이 KBO 야구 라인업 이미지에서 AWAY팀(${team1})과 HOME팀(${team2})의 선발투수와 선발타자 1~9번 라인업을 추출해줘.
 반드시 아래 JSON 구조로만 반환해 (마크다운 백틱은 사용 금지, 오직 JSON만 반환):
 {
@@ -314,30 +375,71 @@
                         generationConfig: { responseMimeType: "application/json" }
                     };
 
-                    const fetchWithBackoff = async () => {
-                        const delays = [1000, 2000, 4000, 8000, 16000];
-                        for (let i = 0; i < 5; i++) {
-                            try {
-                                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                                if (res.ok) {
-                                    return await res.json();
-                                } else {
-                                    const errText = await res.text();
-                                    console.error(`API 오류 (상태코드: ${res.status}):`, errText);
-                                    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
-                                        localStorage.removeItem('kbo_gemini_api_key'); // API 키가 틀렸을 경우 리셋
-                                        throw new Error("Client Error: " + errText); // 400번대 에러(API키 누락 등)는 바로 중단
-                                    }
-                                }
-                            } catch (err) {
-                                if (i === 4 || err.message.includes("Client Error")) throw err;
-                            }
-                            await new Promise(r => setTimeout(r, delays[i]));
-                        }
-                        throw new Error("모든 재시도 실패");
-                    };
+                    // 🔥 혁신: 실패 시 자동으로 다음 버전을 찔러보는 다중 엔진 배열 🔥
+                    const fallbackModels = [
+                        "gemini-1.5-flash-latest",
+                        "gemini-1.5-flash",
+                        "gemini-2.5-flash",
+                        "gemini-pro"
+                    ];
 
-                    const result = await fetchWithBackoff();
+                    let result = null;
+                    let lastErrorMessage = "";
+
+                    for (const model of fallbackModels) {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                        console.log(`[AI] 시도 중인 모델 엔진: ${model}`);
+
+                        const fetchWithBackoff = async () => {
+                            const delays = [1000, 2000, 4000]; 
+                            for (let i = 0; i < 3; i++) {
+                                try {
+                                    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                    if (res.ok) {
+                                        return await res.json();
+                                    } else {
+                                        const errText = await res.text();
+                                        console.error(`API 오류 (상태코드: ${res.status}):`, errText);
+                                        
+                                        if (res.status === 400 || res.status === 403) {
+                                            localStorage.removeItem('kbo_gemini_api_key');
+                                            throw new Error(`API 키가 잘못되었거나 권한이 없습니다.`);
+                                        } else if (res.status === 404) {
+                                            throw new Error("MODEL_NOT_FOUND"); // 다음 모델로 넘기기 위한 고의 에러
+                                        } else if (res.status === 429) {
+                                            throw new Error("구글 API 무료 할당량 초과");
+                                        }
+                                        throw new Error(`구글 서버 오류 (코드: ${res.status})`);
+                                    }
+                                } catch (err) {
+                                    if (err.name === "TypeError" && err.message.includes("fetch")) {
+                                        throw new Error("브라우저 통신 차단 (광고차단기를 끄거나 다른 브라우저를 사용하세요)");
+                                    }
+                                    if (err.message.includes("API 키가 잘못") || err.message.includes("할당량") || err.message === "MODEL_NOT_FOUND") throw err;
+                                    if (i === 2) throw err;
+                                }
+                                await new Promise(r => setTimeout(r, delays[i]));
+                            }
+                        };
+
+                        try {
+                            result = await fetchWithBackoff();
+                            break; // 성공하면 반복문 즉시 탈출 (다음 모델 찔러볼 필요 없음)
+                        } catch (err) {
+                            if (err.message === "MODEL_NOT_FOUND") {
+                                console.warn(`[AI] ${model} 버전을 지원하지 않아 다음 버전으로 넘어갑니다.`);
+                                lastErrorMessage = "사용 가능한 모델 버전을 찾을 수 없습니다.";
+                                continue; // 404면 포기하지 않고 다음 엔진으로 넘어감
+                            } else {
+                                throw err; // 권한 오류나 할당량 초과는 바로 에러 뿜고 완전 정지
+                            }
+                        }
+                    }
+
+                    if (!result) {
+                        throw new Error(lastErrorMessage || "모든 모델 버전 시도에 실패했습니다.");
+                    }
+
                     let text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                     
                     if(text) {
@@ -355,18 +457,11 @@
                     }
                 } catch (e) {
                     console.error("AI Error:", e);
-                    if (e.message === "API_KEY_MISSING") {
-                        showToast('API 키 입력이 취소되었습니다.');
-                    } else if (e.message.includes("Client Error")) {
-                        showToast('API 키가 유효하지 않아 초기화되었습니다. 다시 시도해주세요!');
-                    } else {
-                        showToast('AI 서버 통신 중 일시적인 오류가 발생했습니다.');
-                    }
+                    showToast(`오류 발생: ${e.message}`);
                 } finally {
                     btn.innerHTML = originalBtnHtml;
                     btn.disabled = false;
                     btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    event.target.value = ''; 
                 }
             };
             reader.readAsDataURL(file);
