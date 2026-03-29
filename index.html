@@ -391,14 +391,17 @@
                     throw new Error("웹페이지를 읽어올 수 없습니다. 유효한 중계 링크인지 확인해주세요.");
                 }
 
-                // AI 토큰 낭비를 막고 텍스트만 쏙 빼내기 (길이를 30000자로 대폭 상향)
+                // 🔥 네이버 스포츠의 숨겨진 데이터(Script)까지 완벽하게 긁어오도록 로직 대폭 수정 🔥
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(proxyData.contents, 'text/html');
-                doc.querySelectorAll('script, style, img, svg, iframe, noscript').forEach(el => el.remove());
-                const textContent = doc.body.innerText.replace(/\s+/g, ' ').trim().substring(0, 30000); 
+                // script 태그를 삭제하지 않고 살려둡니다. 실시간 점수와 라인업 데이터가 그 안에 숨어있기 때문입니다!
+                doc.querySelectorAll('style, img, svg, iframe, noscript').forEach(el => el.remove());
+                
+                // body.innerText 대신 문서 전체의 텍스트(스크립트 데이터 포함)를 넓게 가져옴 (최대 6만자 상향)
+                const textContent = doc.documentElement.textContent.replace(/\s+/g, ' ').trim().substring(0, 60000); 
 
                 if (textContent.length < 50) {
-                    throw new Error("링크 보안 차단으로 내용을 읽을 수 없습니다. (모바일 버전 링크 m.sports.naver.com을 시도해보세요)");
+                    throw new Error("링크 보안 차단으로 내용을 읽을 수 없습니다. 다른 중계 링크를 시도해주세요.");
                 }
 
                 const promptText = `다음은 KBO 야구 중계 페이지의 추출된 텍스트야. 여기서 ${team1}과(와) ${team2}의 실시간 경기 정보를 정확히 추출해줘.
