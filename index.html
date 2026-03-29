@@ -180,7 +180,7 @@
                             <div class="flex flex-col gap-2 mb-4 bg-black/20 p-3 rounded-xl border border-white/5">
                                 <div class="flex justify-end mb-1">
                                     <input type="file" id="file-${match.id}" accept="image/*" class="hidden" onchange="processLineupImage(event, ${match.id}, '${match.team1}', '${match.team2}')">
-                                    <button onclick="document.getElementById('file-${match.id}').click()" class="bg-indigo-600/80 hover:bg-indigo-500 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow flex items-center gap-1.5 active:scale-95 transition-all">
+                                    <button id="btn-ai-${match.id}" onclick="document.getElementById('file-${match.id}').click()" class="bg-indigo-600/80 hover:bg-indigo-500 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg shadow flex items-center gap-1.5 active:scale-95 transition-all">
                                         <i class="fa-solid fa-camera-retro"></i> AI 캡처 자동입력
                                     </button>
                                 </div>
@@ -270,60 +270,83 @@
             const file = event.target.files[0];
             if (!file) return;
 
+            // 버튼 상태 변경: 로딩 중 표시
+            const btn = document.getElementById(`btn-ai-${matchId}`);
+            const originalBtnHtml = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 분석 진행중...`;
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+
             showToast('AI가 라인업 이미지를 분석 중입니다... ⚾️');
 
             const reader = new FileReader();
             reader.onloadend = async () => {
-                const base64String = reader.result.split(',')[1];
-                const mimeType = file.type;
-                const apiKey = ""; // 런타임 환경에서 자동 제공됨
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-                const promptText = `이 KBO 야구 라인업 이미지에서 AWAY팀(${team1})과 HOME팀(${team2})의 선발투수와 선발타자 1~9번 라인업을 추출해줘.
-반드시 아래 JSON 구조로만 반환해 (마크다운 백틱은 사용 금지):
-{
-  "awayPitcher": "${team1} 투수 이름",
-  "homePitcher": "${team2} 투수 이름",
-  "awayLineup": "${team1} 타자1, 타자2, 타자3, 타자4, 타자5, 타자6, 타자7, 타자8, 타자9",
-  "homeLineup": "${team2} 타자1, 타자2, 타자3, 타자4, 타자5, 타자6, 타자7, 타자8, 타자9"
-}`;
-
-                const payload = {
-                    contents: [{ role: "user", parts: [{ text: promptText }, { inlineData: { mimeType: mimeType, data: base64String } }] }],
-                    generationConfig: { responseMimeType: "application/json" }
-                };
-
-                const fetchWithBackoff = async () => {
-                    const delays = [1000, 2000, 4000, 8000, 16000];
-                    for (let i = 0; i < 5; i++) {
-                        try {
-                            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                            if (res.ok) return await res.json();
-                        } catch (err) {
-                            if (i === 4) throw err;
-                        }
-                        await new Promise(r => setTimeout(r, delays[i]));
-                    }
-                    throw new Error("All retries failed");
-                };
-
                 try {
+                    const base64String = reader.result.split(',')[1];
+                    const mimeType = file.type;
+                    const apiKey = ""; // 런타임 환경에서 자동 제공됨
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+                    const promptText = `이 KBO 야구 라인업 이미지에서 AWAY팀(${team1})과 HOME팀(${team2})의 선발투수와 선발타자 1~9번 라인업을 추출해줘.`;
+
+                    // AI 응답의 정확도를 100%로 끌어올리는 Schema 적용
+                    const payload = {
+                        contents: [{ role: "user", parts: [{ text: promptText }, { inlineData: { mimeType: mimeType, data: base64String } }] }],
+                        generationConfig: { 
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    awayPitcher: { type: "STRING", description: `${team1} 선발투수 이름` },
+                                    homePitcher: { type: "STRING", description: `${team2} 선발투수 이름` },
+                                    awayLineup: { type: "STRING", description: `${team1} 선발타자 1번~9번 이름 (쉼표로 구분, 예: 홍길동, 김철수...)` },
+                                    homeLineup: { type: "STRING", description: `${team2} 선발타자 1번~9번 이름 (쉼표로 구분, 예: 홍길동, 김철수...)` }
+                                }
+                            }
+                        }
+                    };
+
+                    const fetchWithBackoff = async () => {
+                        const delays = [1000, 2000, 4000, 8000, 16000];
+                        for (let i = 0; i < 5; i++) {
+                            try {
+                                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                if (res.ok) return await res.json();
+                            } catch (err) {
+                                if (i === 4) throw err;
+                            }
+                            await new Promise(r => setTimeout(r, delays[i]));
+                        }
+                        throw new Error("All retries failed");
+                    };
+
                     const result = await fetchWithBackoff();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    let text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
                     if(text) {
+                        // AI가 혹시라도 마크다운을 붙여서 보낼 경우를 대비해 청소
+                        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
                         const data = JSON.parse(text);
+                        
                         if(data.awayPitcher) document.getElementById(`away-pitcher-${matchId}`).value = data.awayPitcher;
                         if(data.homePitcher) document.getElementById(`home-pitcher-${matchId}`).value = data.homePitcher;
                         if(data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
                         if(data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
+                        
                         showToast('AI 스캔 완료! 라인업이 자동 입력되었습니다.');
                     } else {
                         showToast('AI 분석에 실패했습니다. 이미지를 다시 확인해주세요.');
                     }
                 } catch (e) {
+                    console.error("AI Error:", e);
                     showToast('AI 서버 통신 중 일시적인 오류가 발생했습니다.');
+                } finally {
+                    // 성공이든 실패든 분석이 끝나면 버튼 원상복구
+                    btn.innerHTML = originalBtnHtml;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    event.target.value = ''; // 다음 업로드를 위해 입력 초기화
                 }
-                event.target.value = ''; // 입력 초기화
             };
             reader.readAsDataURL(file);
         }
