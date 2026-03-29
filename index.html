@@ -284,26 +284,31 @@
                 try {
                     const base64String = reader.result.split(',')[1];
                     const mimeType = file.type;
-                    const apiKey = ""; // 런타임 환경에서 자동 제공됨
+                    
+                    // 🔥 깃허브 호스팅용 API 키 로컬 저장소 처리 🔥
+                    let apiKey = localStorage.getItem('kbo_gemini_api_key');
+                    if (!apiKey) {
+                        apiKey = prompt("AI 캡처 기능을 위한 Gemini API 키를 입력해주세요.\n(최초 1회만 입력하면 기기에 안전하게 자동 저장됩니다.)");
+                        if (!apiKey) {
+                            throw new Error("API_KEY_MISSING");
+                        }
+                        localStorage.setItem('kbo_gemini_api_key', apiKey);
+                    }
+                    
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-                    const promptText = `이 KBO 야구 라인업 이미지에서 AWAY팀(${team1})과 HOME팀(${team2})의 선발투수와 선발타자 1~9번 라인업을 추출해줘.`;
+                    const promptText = `이 KBO 야구 라인업 이미지에서 AWAY팀(${team1})과 HOME팀(${team2})의 선발투수와 선발타자 1~9번 라인업을 추출해줘.
+반드시 아래 JSON 구조로만 반환해 (마크다운 백틱은 사용 금지, 오직 JSON만 반환):
+{
+  "awayPitcher": "${team1} 투수 이름",
+  "homePitcher": "${team2} 투수 이름",
+  "awayLineup": "${team1} 타자1, 타자2, 타자3, 타자4, 타자5, 타자6, 타자7, 타자8, 타자9",
+  "homeLineup": "${team2} 타자1, 타자2, 타자3, 타자4, 타자5, 타자6, 타자7, 타자8, 타자9"
+}`;
 
-                    // AI 응답의 정확도를 100%로 끌어올리는 Schema 적용
                     const payload = {
                         contents: [{ role: "user", parts: [{ text: promptText }, { inlineData: { mimeType: mimeType, data: base64String } }] }],
-                        generationConfig: { 
-                            responseMimeType: "application/json",
-                            responseSchema: {
-                                type: "OBJECT",
-                                properties: {
-                                    awayPitcher: { type: "STRING", description: `${team1} 선발투수 이름` },
-                                    homePitcher: { type: "STRING", description: `${team2} 선발투수 이름` },
-                                    awayLineup: { type: "STRING", description: `${team1} 선발타자 1번~9번 이름 (쉼표로 구분, 예: 홍길동, 김철수...)` },
-                                    homeLineup: { type: "STRING", description: `${team2} 선발타자 1번~9번 이름 (쉼표로 구분, 예: 홍길동, 김철수...)` }
-                                }
-                            }
-                        }
+                        generationConfig: { responseMimeType: "application/json" }
                     };
 
                     const fetchWithBackoff = async () => {
@@ -311,20 +316,28 @@
                         for (let i = 0; i < 5; i++) {
                             try {
                                 const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                                if (res.ok) return await res.json();
+                                if (res.ok) {
+                                    return await res.json();
+                                } else {
+                                    const errText = await res.text();
+                                    console.error(`API 오류 (상태코드: ${res.status}):`, errText);
+                                    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+                                        localStorage.removeItem('kbo_gemini_api_key'); // API 키가 틀렸을 경우 리셋
+                                        throw new Error("Client Error: " + errText); // 400번대 에러(API키 누락 등)는 바로 중단
+                                    }
+                                }
                             } catch (err) {
-                                if (i === 4) throw err;
+                                if (i === 4 || err.message.includes("Client Error")) throw err;
                             }
                             await new Promise(r => setTimeout(r, delays[i]));
                         }
-                        throw new Error("All retries failed");
+                        throw new Error("모든 재시도 실패");
                     };
 
                     const result = await fetchWithBackoff();
                     let text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                     
                     if(text) {
-                        // AI가 혹시라도 마크다운을 붙여서 보낼 경우를 대비해 청소
                         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
                         const data = JSON.parse(text);
                         
@@ -339,13 +352,18 @@
                     }
                 } catch (e) {
                     console.error("AI Error:", e);
-                    showToast('AI 서버 통신 중 일시적인 오류가 발생했습니다.');
+                    if (e.message === "API_KEY_MISSING") {
+                        showToast('API 키 입력이 취소되었습니다.');
+                    } else if (e.message.includes("Client Error")) {
+                        showToast('API 키가 유효하지 않아 초기화되었습니다. 다시 시도해주세요!');
+                    } else {
+                        showToast('AI 서버 통신 중 일시적인 오류가 발생했습니다.');
+                    }
                 } finally {
-                    // 성공이든 실패든 분석이 끝나면 버튼 원상복구
                     btn.innerHTML = originalBtnHtml;
                     btn.disabled = false;
                     btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    event.target.value = ''; // 다음 업로드를 위해 입력 초기화
+                    event.target.value = ''; 
                 }
             };
             reader.readAsDataURL(file);
