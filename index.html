@@ -65,7 +65,7 @@
 
         let scheduleData = [];
         let liveDataStore = {}; 
-        let isSettingsUnlocked = false;
+        let isSettingsUnlocked = localStorage.getItem('kbo_admin_unlocked') === 'true';
         
         const initialScheduleData = []; // 강제 업로드용 내장 데이터 (필요시 채워넣으세요)
 
@@ -258,6 +258,7 @@
             const pwd = document.getElementById('admin-pwd').value;
             if (pwd === '3611') {
                 isSettingsUnlocked = true;
+                localStorage.setItem('kbo_admin_unlocked', 'true');
                 renderSettings();
                 showToast('관리자 모드가 활성화되었습니다.');
             } else {
