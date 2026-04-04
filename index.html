@@ -11,6 +11,8 @@
     <!-- 🔥 파이어베이스 SDK (Firebase v10 Compat) 🔥 -->
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+    <!-- 🔥 파이어베이스 Auth(인증) SDK 추가 🔥 -->
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
 
     <style>
         @font-face {
@@ -42,9 +44,11 @@
 <body class="w-full min-h-[100dvh] flex justify-center items-start overflow-y-auto pb-20">
 
     <div id="mobile-wrapper" class="w-full h-full max-w-[500px] relative flex flex-col pt-8 px-5">
-        <div class="flex items-center justify-center gap-2 mb-8 mt-4">
+        <div class="flex items-center justify-center gap-2 mb-8 mt-4 relative">
             <i class="fa-solid fa-server text-point text-2xl"></i>
             <h1 class="text-2xl font-black text-white tracking-tight">KBO 관리자 대시보드</h1>
+            <!-- 🔥 로그아웃 버튼 추가 🔥 -->
+            <button onclick="logoutAdmin()" id="logout-btn" class="hidden absolute right-0 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[10px] font-bold px-2.5 py-1.5 rounded shadow active:scale-95 transition-all text-gray-300">로그아웃</button>
         </div>
         
         <div id="settings-container" class="w-full flex-1 flex flex-col gap-4"></div>
@@ -75,13 +79,14 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const auth = firebase.auth(); // 🔥 인증 모듈 초기화
 
         let scheduleData = [];
         let liveDataStore = {}; 
-        let isSettingsUnlocked = localStorage.getItem('kbo_admin_unlocked') === 'true';
-        let pendingAiTask = null; // API 키 입력 대기 시 작업을 잠시 보관할 변수
+        let isSettingsUnlocked = false; // 🔥 보안을 위해 기본값을 false로 변경
+        let pendingAiTask = null; 
         
-        const initialScheduleData = []; // 강제 업로드용 내장 데이터
+        const initialScheduleData = []; 
 
         let currentDate = new Date();
         const todayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
@@ -105,26 +110,121 @@
             }, 3500); 
         }
 
+        // 🔥 문서 합치기(Chunking) 유틸리티 함수 (1MB 초과 방지) 🔥
+        function chunkDataForFirestore(dataArray, maxSize = 800000) {
+            let chunks = [];
+            let currentChunk = [];
+            let currentSize = 0;
+
+            dataArray.forEach(item => {
+                const itemStr = JSON.stringify(item);
+                let itemSize = 0;
+                for (let i = 0; i < itemStr.length; i++) {
+                    const c = itemStr.charCodeAt(i);
+                    itemSize += c >> 11 ? 3 : c >> 7 ? 2 : 1;
+                }
+                
+                if (currentSize + itemSize > maxSize && currentChunk.length > 0) {
+                    chunks.push(currentChunk);
+                    currentChunk = [item];
+                    currentSize = itemSize;
+                } else {
+                    currentChunk.push(item);
+                    currentSize += itemSize;
+                }
+            });
+            if (currentChunk.length > 0) chunks.push(currentChunk);
+            return chunks;
+        }
+
+        // 🔥 로그인 상태 감지 리스너 🔥
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                isSettingsUnlocked = true;
+                const logoutBtn = document.getElementById('logout-btn');
+                if(logoutBtn) logoutBtn.classList.remove('hidden');
+                syncWithFirestore(); // 로그인 성공 시에만 데이터 불러오기
+            } else {
+                isSettingsUnlocked = false;
+                const logoutBtn = document.getElementById('logout-btn');
+                if(logoutBtn) logoutBtn.classList.add('hidden');
+                renderSettings(); // 로그인 전이면 로그인 화면 렌더링
+            }
+        });
+
+        // 🔥 관리자 로그인 함수 🔥
+        async function loginAdmin() {
+            const email = document.getElementById('admin-email').value;
+            const pwd = document.getElementById('admin-pwd').value;
+            try {
+                await auth.signInWithEmailAndPassword(email, pwd);
+                showToast('로그인 성공! 대시보드를 불러옵니다.');
+            } catch (e) {
+                showToast('이메일이나 비밀번호가 일치하지 않습니다.');
+            }
+        }
+
+        // 🔥 관리자 로그아웃 함수 🔥
+        async function logoutAdmin() {
+            try {
+                await auth.signOut();
+                scheduleData = [];
+                liveDataStore = {};
+                showToast('안전하게 로그아웃 되었습니다.');
+            } catch (e) {
+                showToast('로그아웃 중 오류가 발생했습니다.');
+            }
+        }
+
         async function syncWithFirestore() {
             try {
-                const matchesSnap = await db.collection("matches").get();
-                if (!matchesSnap.empty) {
-                    scheduleData = matchesSnap.docs.map(doc => doc.data());
-                    scheduleData.sort((a, b) => {
-                        if (a.date === b.date) return (a.time || "00:00").localeCompare(b.time || "00:00");
-                        return a.date.localeCompare(b.date);
+                // 🔥 1. 경기 일정 합치기 (matches_merged) 연동 🔥
+                const mergedMatchesSnap = await db.collection("matches_merged").get();
+
+                if (!mergedMatchesSnap.empty) {
+                    scheduleData = [];
+                    mergedMatchesSnap.forEach(doc => {
+                        const chunkData = doc.data().data || [];
+                        scheduleData.push(...chunkData);
                     });
+                } else {
+                    // 구버전(matches) 읽기
+                    const oldMatchesSnap = await db.collection("matches").get();
+                    if (!oldMatchesSnap.empty) {
+                        scheduleData = oldMatchesSnap.docs.map(doc => doc.data());
+                    }
                 }
 
-                db.collection("lineups").onSnapshot((snapshot) => {
-                    snapshot.forEach(doc => {
-                        liveDataStore[doc.id] = doc.data(); 
-                    });
-                    if (isSettingsUnlocked) renderSettings();
+                scheduleData.sort((a, b) => {
+                    if (a.date === b.date) return (a.time || "00:00").localeCompare(b.time || "00:00");
+                    return a.date.localeCompare(b.date);
                 });
+
+                // 🔥 2. 라인업 및 실시간 점수 합치기 (lineups_merged) 연동 🔥
+                db.collection("lineups_merged").onSnapshot((snapshot) => {
+                    if (!snapshot.empty) {
+                        liveDataStore = {};
+                        snapshot.forEach(doc => {
+                            const chunkData = doc.data();
+                            Object.keys(chunkData).forEach(key => {
+                                liveDataStore[key] = chunkData[key];
+                            });
+                        });
+                        if (isSettingsUnlocked) renderSettings();
+                    } else {
+                        // 구버전 호환
+                        db.collection("lineups").onSnapshot((oldSnap) => {
+                            oldSnap.forEach(doc => {
+                                liveDataStore[doc.id] = doc.data(); 
+                            });
+                            if (isSettingsUnlocked) renderSettings();
+                        });
+                    }
+                });
+
             } catch (error) {
                 console.error("통신 에러:", error);
-                showToast("데이터를 불러오지 못했습니다.");
+                showToast("데이터를 불러오지 못했습니다. 권한을 확인하세요.");
             }
         }
 
@@ -132,14 +232,16 @@
             const container = document.getElementById('settings-container');
             if (!container) return;
 
+            // 🔥 로그인 인증 화면으로 변경 🔥
             if (!isSettingsUnlocked) {
                 container.innerHTML = `
                     <div class="flex flex-col items-center justify-center h-[50vh] gap-4 bg-[#111] rounded-3xl border border-white/10 p-8 shadow-2xl">
                         <i class="fa-solid fa-lock text-5xl text-gray-600 mb-2 drop-shadow-lg"></i>
-                        <h2 class="text-xl font-bold text-white">관리자 접근 권한</h2>
-                        <p class="text-[12px] text-gray-400 mb-2 text-center">대시보드에 접근하려면 보안 암호를 입력하세요.</p>
-                        <input type="password" id="admin-pwd" placeholder="비밀번호" class="bg-[#1C1C1E] text-white border border-white/20 rounded-xl p-3.5 text-center w-full focus:outline-none focus:border-point tracking-widest font-bold text-lg">
-                        <button onclick="checkAdminPwd()" class="bg-point hover:bg-blue-600 text-white font-bold py-3.5 px-8 rounded-xl shadow-md transition-all active:scale-95 w-full mt-2">인증하기</button>
+                        <h2 class="text-xl font-bold text-white">관리자 로그인</h2>
+                        <p class="text-[12px] text-gray-400 mb-2 text-center">대시보드에 접근하려면 관리자 계정으로 로그인하세요.</p>
+                        <input type="email" id="admin-email" placeholder="관리자 이메일" class="bg-[#1C1C1E] text-white border border-white/20 rounded-xl p-3.5 text-center w-full focus:outline-none focus:border-point tracking-widest text-sm mb-2">
+                        <input type="password" id="admin-pwd" placeholder="비밀번호" class="bg-[#1C1C1E] text-white border border-white/20 rounded-xl p-3.5 text-center w-full focus:outline-none focus:border-point tracking-widest font-bold text-lg mb-2">
+                        <button onclick="loginAdmin()" class="bg-point hover:bg-blue-600 text-white font-bold py-3.5 px-8 rounded-xl shadow-md transition-all active:scale-95 w-full">로그인</button>
                     </div>
                 `;
                 return;
@@ -278,18 +380,6 @@
                 </div>`;
             
             container.innerHTML = html;
-        }
-
-        function checkAdminPwd() {
-            const pwd = document.getElementById('admin-pwd').value;
-            if (pwd === '3611') {
-                isSettingsUnlocked = true;
-                localStorage.setItem('kbo_admin_unlocked', 'true');
-                renderSettings();
-                showToast('관리자 모드가 활성화되었습니다.');
-            } else {
-                showToast('비밀번호가 일치하지 않습니다.');
-            }
         }
 
         // 🔥 수동 초기화 함수 🔥
@@ -647,15 +737,18 @@ ${textContent}
             const homeLineup = homeLineupStr ? homeLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
 
             try {
-                await db.collection("lineups").doc(matchId.toString()).set({
-                    gameStatus: status,
-                    inning: inning,
-                    awayScore: awayScore,
-                    homeScore: homeScore,
-                    awayPitcher: awayPitcher,
-                    homePitcher: homePitcher,
-                    awayLineup: awayLineup,
-                    homeLineup: homeLineup
+                // 🔥 lineups_merged 의 청크(chunk_0)로 데이터 통합 저장 🔥
+                await db.collection("lineups_merged").doc("chunk_0").set({
+                    [matchId.toString()]: {
+                        gameStatus: status,
+                        inning: inning,
+                        awayScore: awayScore,
+                        homeScore: homeScore,
+                        awayPitcher: awayPitcher,
+                        homePitcher: homePitcher,
+                        awayLineup: awayLineup,
+                        homeLineup: homeLineup
+                    }
                 }, { merge: true });
 
                 showToast('성공적으로 서버에 저장되었습니다.');
@@ -734,12 +827,11 @@ ${textContent}
             }
 
             try {
+                // 🔥 rankings_merged 로 순위 데이터 청크 분할 및 통합 저장 🔥
+                const chunks = chunkDataForFirestore(statsArray);
                 const batch = db.batch();
-                statsArray.forEach(t => {
-                    const dataToSave = { ...t };
-                    delete dataToSave._calcWinRate; 
-                    const docRef = db.collection("rankings").doc(t.team);
-                    batch.set(docRef, dataToSave);
+                chunks.forEach((chunk, index) => {
+                    batch.set(db.collection("rankings_merged").doc(`chunk_${index}`), { data: chunk });
                 });
                 await batch.commit();
                 showToast('서버 순위가 완벽하게 동기화되었습니다!');
@@ -752,9 +844,11 @@ ${textContent}
         async function forceUploadSchedule() {
             showToast('일정 데이터를 서버로 강제 업로드 중입니다...');
             try {
+                // 🔥 matches_merged 로 일정 데이터 청크 분할 및 통합 업로드 🔥
+                const chunks = chunkDataForFirestore(initialScheduleData);
                 const batch = db.batch();
-                initialScheduleData.forEach(match => {
-                    batch.set(db.collection("matches").doc(match.id.toString()), match);
+                chunks.forEach((chunk, index) => {
+                    batch.set(db.collection("matches_merged").doc(`chunk_${index}`), { data: chunk });
                 });
                 await batch.commit();
                 
@@ -769,12 +863,13 @@ ${textContent}
         async function backupData() {
             showToast('데이터 백업 중...');
             try {
-                const lineupsSnap = await db.collection("lineups").get();
-                const rankingsSnap = await db.collection("rankings").get();
+                // 🔥 통합된(merged) 컬렉션을 백업 🔥
+                const lineupsSnap = await db.collection("lineups_merged").get();
+                const rankingsSnap = await db.collection("rankings_merged").get();
                 const batch = db.batch();
 
-                lineupsSnap.forEach(doc => { batch.set(db.collection("backup_lineups").doc(doc.id), doc.data()); });
-                rankingsSnap.forEach(doc => { batch.set(db.collection("backup_rankings").doc(doc.id), doc.data()); });
+                lineupsSnap.forEach(doc => { batch.set(db.collection("backup_lineups_merged").doc(doc.id), doc.data()); });
+                rankingsSnap.forEach(doc => { batch.set(db.collection("backup_rankings_merged").doc(doc.id), doc.data()); });
 
                 await batch.commit();
                 showToast('백업이 완료되었습니다.');
@@ -787,8 +882,9 @@ ${textContent}
         async function restoreData() {
             showToast('데이터 복구 중...');
             try {
-                const bLineupsSnap = await db.collection("backup_lineups").get();
-                const bRankingsSnap = await db.collection("backup_rankings").get();
+                // 🔥 통합된(merged) 백업 컬렉션에서 복구 🔥
+                const bLineupsSnap = await db.collection("backup_lineups_merged").get();
+                const bRankingsSnap = await db.collection("backup_rankings_merged").get();
 
                 if (bLineupsSnap.empty && bRankingsSnap.empty) {
                     showToast('복구할 백업 데이터가 없습니다.');
@@ -797,8 +893,8 @@ ${textContent}
 
                 const batch = db.batch();
 
-                bLineupsSnap.forEach(doc => { batch.set(db.collection("lineups").doc(doc.id), doc.data()); });
-                bRankingsSnap.forEach(doc => { batch.set(db.collection("rankings").doc(doc.id), doc.data()); });
+                bLineupsSnap.forEach(doc => { batch.set(db.collection("lineups_merged").doc(doc.id), doc.data()); });
+                bRankingsSnap.forEach(doc => { batch.set(db.collection("rankings_merged").doc(doc.id), doc.data()); });
 
                 await batch.commit();
                 showToast('데이터가 백업 시점으로 복구되었습니다.');
@@ -807,11 +903,6 @@ ${textContent}
                 showToast('복구 중 오류가 발생했습니다.');
             }
         }
-
-        window.onload = () => {
-            syncWithFirestore();
-            renderSettings();
-        };
     </script>
 </body>
 </html>
