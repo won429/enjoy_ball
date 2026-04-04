@@ -200,14 +200,37 @@
                     return a.date.localeCompare(b.date);
                 });
 
+                // 🔥 [긴급 복구] 사라진 구버전 데이터를 신버전(Merged)으로 완벽하게 자동 이관합니다 🔥
+                const oldLineupsSnap = await db.collection("lineups").get();
+                let baseLineupData = {};
+                oldLineupsSnap.forEach(doc => {
+                    baseLineupData[doc.id] = doc.data();
+                });
+
+                const mergedRef = db.collection("lineups_merged").doc("chunk_0");
+                const mergedDoc = await mergedRef.get();
+                let existingMerged = mergedDoc.exists ? mergedDoc.data() : {};
+                
+                let needsUpdate = false;
+                Object.keys(baseLineupData).forEach(key => {
+                    if (!existingMerged[key]) {
+                        existingMerged[key] = baseLineupData[key];
+                        needsUpdate = true;
+                    }
+                });
+                
+                if (needsUpdate) {
+                    await mergedRef.set(existingMerged, { merge: true });
+                }
+
                 // 🔥 2. 라인업 및 실시간 점수 합치기 (lineups_merged) 연동 🔥
                 db.collection("lineups_merged").onSnapshot((snapshot) => {
                     if (!snapshot.empty) {
-                        liveDataStore = {};
+                        liveDataStore = { ...baseLineupData }; // 구버전 데이터를 1차로 깔아서 유실 완벽 방지
                         snapshot.forEach(doc => {
                             const chunkData = doc.data();
                             Object.keys(chunkData).forEach(key => {
-                                liveDataStore[key] = chunkData[key];
+                                liveDataStore[key] = chunkData[key]; // 신버전 데이터 덮어쓰기
                             });
                         });
                         if (isSettingsUnlocked) renderSettings();
@@ -737,18 +760,23 @@ ${textContent}
             const homeLineup = homeLineupStr ? homeLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
 
             try {
+                const matchData = {
+                    gameStatus: status,
+                    inning: inning,
+                    awayScore: awayScore,
+                    homeScore: homeScore,
+                    awayPitcher: awayPitcher,
+                    homePitcher: homePitcher,
+                    awayLineup: awayLineup,
+                    homeLineup: homeLineup
+                };
+
+                // 🔥 데이터 유실을 100% 방지하기 위해 구버전(lineups)에도 똑같이 안전하게 저장해둡니다 🔥
+                await db.collection("lineups").doc(matchId.toString()).set(matchData, { merge: true });
+
                 // 🔥 lineups_merged 의 청크(chunk_0)로 데이터 통합 저장 🔥
                 await db.collection("lineups_merged").doc("chunk_0").set({
-                    [matchId.toString()]: {
-                        gameStatus: status,
-                        inning: inning,
-                        awayScore: awayScore,
-                        homeScore: homeScore,
-                        awayPitcher: awayPitcher,
-                        homePitcher: homePitcher,
-                        awayLineup: awayLineup,
-                        homeLineup: homeLineup
-                    }
+                    [matchId.toString()]: matchData
                 }, { merge: true });
 
                 showToast('성공적으로 서버에 저장되었습니다.');
