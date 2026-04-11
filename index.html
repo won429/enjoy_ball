@@ -85,6 +85,7 @@
         let liveDataStore = {}; 
         let isSettingsUnlocked = false; // 🔥 보안을 위해 기본값을 false로 변경
         let pendingAiTask = null; 
+        let isSaving = false; // 🔥 저장 중 화면 증발 방지 플래그 추가
         
         const initialScheduleData = []; 
 
@@ -264,21 +265,25 @@
                     const unsub = db.collection("lineups").doc(match.id.toString()).onSnapshot(doc => {
                         if (doc.exists) {
                             liveDataStore[match.id] = doc.data();
-                            if (isSettingsUnlocked) renderSettings();
                         }
+                        // 🔥 저장 중일 때는 화면 리렌더링 잠금 (입력 데이터 증발 완벽 방지)
+                        if (isSettingsUnlocked && !isSaving) renderSettings();
                     });
                     activeLiveListeners.push(unsub);
                 });
             } else {
-                if (isSettingsUnlocked) renderSettings();
+                if (isSettingsUnlocked && !isSaving) renderSettings();
             }
         }
 
         function handleDateChange() {
             const dateInput = document.getElementById('settings-date-input');
             if (dateInput) {
-                // 사용자가 과거/미래 날짜를 누르는 순간, 그제서야 해당 데이터를 서버에 요청!
-                listenToDateMatches(dateInput.value);
+                const targetDate = dateInput.value;
+                // 🔥 달력을 누르는 순간, 화면부터 즉시 렌더링해서 내일/미래 껍데기 데이터 띄우기
+                if (isSettingsUnlocked) renderSettings();
+                // 그 다음 해당 날짜 데이터를 서버에 요청
+                listenToDateMatches(targetDate);
             }
         }
 
@@ -794,6 +799,8 @@ ${textContent}
                 btn.classList.add('opacity-50', 'cursor-not-allowed');
             }
 
+            isSaving = true; // 🔥 저장 로직 시작! 화면 새로고침 원천 차단
+
             try {
                 let timeChangedAny = false;
                 let anyGameEnded = false;
@@ -877,11 +884,8 @@ ${textContent}
                 console.error("일괄 저장 에러:", e);
                 showToast('저장 중 통신 오류가 발생했습니다.');
             } finally {
-                if(btn) {
-                    btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 현재 화면 전체 일괄 저장`;
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                }
+                isSaving = false; // 🔥 저장 완료! 화면 리렌더링 차단 해제
+                if (isSettingsUnlocked) renderSettings(); // 마지막에 저장된 최신 상태로 딱 1번만 깔끔하게 새로고침
             }
         }
 
