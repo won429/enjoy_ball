@@ -311,6 +311,12 @@
                         <input type="date" id="settings-date-input" value="${selectedDate}" onchange="handleDateChange()" class="bg-[#1C1C1E] text-white border border-white/20 rounded p-1 sm:p-1.5 text-xs sm:text-sm focus:outline-none focus:border-point">
                     </div>
                     <p class="text-[11px] text-gray-400 mb-5">입력 후 <span class="text-point font-bold">저장</span>을 누르면 일반 사용자의 앱에 실시간으로 반영됩니다.<br>상태를 <span class="text-white font-bold">'종료'</span>로 변경 시 <span class="text-white font-bold">전체 순위가 자동 재계산</span>됩니다.</p>
+                    
+                    <!-- 🔥 일괄 저장 마스터 버튼 추가 🔥 -->
+                    <button id="btn-save-all" onclick="saveAllDisplayedMatches()" class="w-full bg-point hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-[0_0_15px_rgba(49,130,246,0.3)] active:scale-95 transition-all mb-4 text-[15px] flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i> 현재 화면 전체 일괄 저장
+                    </button>
+
                     <div class="flex flex-col gap-3.5">
             `;
 
@@ -393,11 +399,8 @@
                                     <option value="종료" ${live.gameStatus === '종료' ? 'selected' : ''} class="text-black">종료</option>
                                     <option value="우취" ${live.gameStatus === '우취' ? 'selected' : ''} class="text-black">우취</option>
                                 </select>
-                                <button onclick="document.getElementById('status-${match.id}').value='우취'; saveMatchData(${match.id});" class="h-9 bg-sky-900/60 hover:bg-sky-800 text-sky-300 font-bold px-2.5 rounded-lg text-[11px] shadow-md active:scale-95 transition-all shrink-0 border border-sky-500/30">
-                                    우취
-                                </button>
-                                <button onclick="saveMatchData(${match.id})" class="h-9 bg-point hover:bg-blue-600 text-white font-bold px-3.5 rounded-lg text-xs shadow-md active:scale-95 transition-all shrink-0">
-                                    서버 저장
+                                <button onclick="document.getElementById('status-${match.id}').value='우취';" class="h-9 bg-sky-900/60 hover:bg-sky-800 text-sky-300 font-bold px-3 rounded-lg text-[11px] shadow-md active:scale-95 transition-all shrink-0 border border-sky-500/30">
+                                    우취 상태로 변경
                                 </button>
                             </div>
                         </div>
@@ -776,52 +779,82 @@ ${textContent}
             reader.readAsDataURL(file);
         }
 
-        async function saveMatchData(matchId) {
-            const status = document.getElementById(`status-${matchId}`).value;
-            const inning = document.getElementById(`inning-${matchId}`).value;
-            const awayScore = parseInt(document.getElementById(`away-score-${matchId}`).value) || 0;
-            const homeScore = parseInt(document.getElementById(`home-score-${matchId}`).value) || 0;
-
-            const awayPitcher = document.getElementById(`away-pitcher-${matchId}`).value.trim();
-            const homePitcher = document.getElementById(`home-pitcher-${matchId}`).value.trim();
-            const awayLineupStr = document.getElementById(`away-lineup-${matchId}`).value;
-            const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
+        // 🔥 개별 저장 함수(saveMatchData) 삭제 및 일괄 저장 함수로 완벽 교체 🔥
+        async function saveAllDisplayedMatches() {
+            let dateInput = document.getElementById('settings-date-input');
+            let selectedDate = dateInput ? dateInput.value : todayStr;
+            let matches = scheduleData.filter(m => m.date === selectedDate);
             
-            const newTime = document.getElementById(`time-${matchId}`).value; // 🔥 시간 값 가져오기
+            if (matches.length === 0) return;
 
-            const awayLineup = awayLineupStr ? awayLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
-            const homeLineup = homeLineupStr ? homeLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
+            const btn = document.getElementById('btn-save-all');
+            if(btn) {
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 전체 저장 중...`;
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
 
             try {
-                // 🔥 경기 시간 변경 감지 및 일정(scheduleData) 업데이트 🔥
-                let timeChanged = false;
-                const matchIndex = scheduleData.findIndex(m => m.id === matchId);
-                if (matchIndex !== -1 && scheduleData[matchIndex].time !== newTime) {
-                    scheduleData[matchIndex].time = newTime;
-                    timeChanged = true;
+                let timeChangedAny = false;
+                let anyGameEnded = false;
+                let mergedLineupsUpdates = {};
+
+                // 화면에 떠있는 모든 경기 데이터 추출 및 처리
+                for (const match of matches) {
+                    const matchId = match.id;
+                    
+                    // 만약 DOM에 없는 경기라면 건너뜀
+                    if (!document.getElementById(`status-${matchId}`)) continue;
+
+                    const status = document.getElementById(`status-${matchId}`).value;
+                    const inning = document.getElementById(`inning-${matchId}`).value;
+                    const awayScore = parseInt(document.getElementById(`away-score-${matchId}`).value) || 0;
+                    const homeScore = parseInt(document.getElementById(`home-score-${matchId}`).value) || 0;
+
+                    const awayPitcher = document.getElementById(`away-pitcher-${matchId}`).value.trim();
+                    const homePitcher = document.getElementById(`home-pitcher-${matchId}`).value.trim();
+                    const awayLineupStr = document.getElementById(`away-lineup-${matchId}`).value;
+                    const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
+                    
+                    const newTime = document.getElementById(`time-${matchId}`).value;
+
+                    const awayLineup = awayLineupStr ? awayLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
+                    const homeLineup = homeLineupStr ? homeLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
+
+                    // 시간 변경 감지
+                    const matchIndex = scheduleData.findIndex(m => m.id === matchId);
+                    if (matchIndex !== -1 && scheduleData[matchIndex].time !== newTime) {
+                        scheduleData[matchIndex].time = newTime;
+                        timeChangedAny = true;
+                    }
+
+                    const matchData = {
+                        gameStatus: status,
+                        inning: inning,
+                        awayScore: awayScore,
+                        homeScore: homeScore,
+                        awayPitcher: awayPitcher,
+                        homePitcher: homePitcher,
+                        awayLineup: awayLineup,
+                        homeLineup: homeLineup
+                    };
+
+                    // 구버전 개별 덮어쓰기
+                    await db.collection("lineups").doc(matchId.toString()).set(matchData, { merge: true });
+                    
+                    // 신버전 통합 저장을 위한 수집
+                    mergedLineupsUpdates[matchId.toString()] = matchData;
+
+                    if (status === '종료') anyGameEnded = true;
                 }
 
-                const matchData = {
-                    gameStatus: status,
-                    inning: inning,
-                    awayScore: awayScore,
-                    homeScore: homeScore,
-                    awayPitcher: awayPitcher,
-                    homePitcher: homePitcher,
-                    awayLineup: awayLineup,
-                    homeLineup: homeLineup
-                };
+                // 신버전 청크에 한 번에 통합 덮어쓰기
+                if (Object.keys(mergedLineupsUpdates).length > 0) {
+                    await db.collection("lineups_merged").doc("chunk_0").set(mergedLineupsUpdates, { merge: true });
+                }
 
-                // 🔥 데이터 유실을 100% 방지하기 위해 구버전(lineups)에도 똑같이 안전하게 저장해둡니다 🔥
-                await db.collection("lineups").doc(matchId.toString()).set(matchData, { merge: true });
-
-                // 🔥 lineups_merged 의 청크(chunk_0)로 데이터 통합 저장 🔥
-                await db.collection("lineups_merged").doc("chunk_0").set({
-                    [matchId.toString()]: matchData
-                }, { merge: true });
-
-                // 🔥 시간이 변경되었다면 matches_merged(일정 데이터)도 함께 업데이트 🔥
-                if (timeChanged) {
+                // 변경된 시간이 하나라도 있다면 일정 데이터 업데이트
+                if (timeChangedAny) {
                     const chunks = chunkDataForFirestore(scheduleData);
                     const batch = db.batch();
                     chunks.forEach((chunk, index) => {
@@ -830,14 +863,21 @@ ${textContent}
                     await batch.commit();
                 }
 
-                showToast('성공적으로 서버에 저장되었습니다.');
+                showToast('✅ 화면의 모든 경기가 한 번에 저장되었습니다!');
 
-                if (status === '종료') {
+                // 종료된 경기가 하나라도 있으면 순위 일괄 갱신
+                if (anyGameEnded) {
                     await recalculateRankings();
                 }
             } catch(e) {
-                console.error("데이터 저장 에러:", e);
+                console.error("일괄 저장 에러:", e);
                 showToast('저장 중 통신 오류가 발생했습니다.');
+            } finally {
+                if(btn) {
+                    btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 현재 화면 전체 일괄 저장`;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
             }
         }
 
