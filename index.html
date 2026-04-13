@@ -395,7 +395,7 @@
                                 <!-- 🔥 상세중계 전용 링크 입력란 (분리된 공간) 🔥 -->
                                 <div class="flex items-center gap-2 mt-2 pt-2.5 border-t border-white/5">
                                     <span class="text-[10px] font-bold text-emerald-400 w-[42px] shrink-0 text-center leading-tight">상세중계<br>링크</span>
-                                    <input type="text" id="broadcast-link-${matchId}" value="${live.broadcastLink || ''}" placeholder="여기에 네이버 상세중계 링크를 붙여넣으세요" class="flex-1 bg-emerald-900/20 text-white text-[11px] rounded border border-emerald-500/30 p-1.5 focus:border-emerald-500 outline-none">
+                                    <input type="text" id="broadcast-link-${match.id}" value="${live.broadcastLink || ''}" placeholder="여기에 네이버 상세중계 링크를 붙여넣으세요" class="flex-1 bg-emerald-900/20 text-white text-[11px] rounded border border-emerald-500/30 p-1.5 focus:border-emerald-500 outline-none">
                                 </div>
                             </div>
 
@@ -558,7 +558,7 @@
                 const textContent = doc.documentElement.textContent.replace(/\s+/g, ' ').trim().substring(0, 60000); 
 
                 if (textContent.length < 50) {
-                    throw new Error("링크 보안 차단으로 내용을 읽을 수 없습니다. 다른 중계 링크를 시도해주세요.");
+                    throw new Error("링크 보안 차단으로 내용을 읽을 수 없습니다. 다른 중계 링크 시도해주세요.");
                 }
 
                 const promptText = `다음은 KBO 야구 중계 페이지의 추출된 텍스트야. 여기서 ${team1}과(와) ${team2}의 실시간 경기 정보를 정확히 추출해줘.
@@ -828,7 +828,7 @@ ${textContent}
                     const homePitcher = document.getElementById(`home-pitcher-${matchId}`).value.trim();
                     const awayLineupStr = document.getElementById(`away-lineup-${matchId}`).value;
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
-                    const broadcastLink = document.getElementById(`broadcast-link-${matchId}`).value.trim(); // 🔥 상세중계 링크 추출 (수정됨)
+                    const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 상세중계 링크 추출 (수정됨)
                     
                     const newTime = document.getElementById(`time-${matchId}`).value;
 
