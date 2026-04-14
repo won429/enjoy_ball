@@ -392,10 +392,16 @@
                                         <input type="text" id="home-lineup-${match.id}" value="${(live.homeLineup || []).join(', ')}" placeholder="${match.team2} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
                                     </div>
                                 </div>
-                                <!-- 🔥 상세중계 전용 링크 입력란 (분리된 공간) 🔥 -->
-                                <div class="flex items-center gap-2 mt-2 pt-2.5 border-t border-white/5">
-                                    <span class="text-[10px] font-bold text-emerald-400 w-[42px] shrink-0 text-center leading-tight">상세중계<br>링크</span>
-                                    <input type="text" id="broadcast-link-${match.id}" value="${live.broadcastLink || ''}" placeholder="여기에 네이버 상세중계 링크를 붙여넣으세요" class="flex-1 bg-emerald-900/20 text-white text-[11px] rounded border border-emerald-500/30 p-1.5 focus:border-emerald-500 outline-none">
+                                <!-- 🔥 상세중계 및 라인업 전용 링크 입력란 (분리된 공간) 🔥 -->
+                                <div class="flex flex-col gap-1.5 mt-2 pt-2.5 border-t border-white/5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] font-bold text-emerald-400 w-[42px] shrink-0 text-center leading-tight">상세중계<br>링크</span>
+                                        <input type="text" id="broadcast-link-${match.id}" value="${live.broadcastLink || ''}" placeholder="여기에 네이버 상세중계 링크를 붙여넣으세요" class="flex-1 bg-emerald-900/20 text-white text-[11px] rounded border border-emerald-500/30 p-1.5 focus:border-emerald-500 outline-none">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] font-bold text-indigo-400 w-[42px] shrink-0 text-center leading-tight">라인업<br>링크</span>
+                                        <input type="text" id="lineup-link-${match.id}" value="${live.lineupLink || ''}" placeholder="여기에 네이버 라인업 링크를 붙여넣으세요" class="flex-1 bg-indigo-900/20 text-white text-[11px] rounded border border-indigo-500/30 p-1.5 focus:border-indigo-500 outline-none">
+                                    </div>
                                 </div>
                             </div>
 
@@ -604,7 +610,7 @@ ${textContent}
                                 if (res.ok) return await res.json();
                                 
                                 const errText = await res.text();
-                                // 🔥 400 에러일 때 키를 삭제하지 않고 다음 모델로 안전하게 넘어가도록 완벽 수정 🔥
+                                // 🔥 400 에러일 때 키 삭제하지 않고 다음 모델로 안전하게 넘어가도록 완벽 수정 🔥
                                 if (res.status === 401 || res.status === 403) {
                                     localStorage.removeItem('kbo_gemini_api_key');
                                     throw new Error(`API 키 오류 또는 권한 없음`);
@@ -789,7 +795,7 @@ ${textContent}
             reader.readAsDataURL(file);
         }
 
-        // 🔥 개별 저장 함수(saveMatchData) 삭제 및 일괄 저장 함수로 완벽 교체 🔥
+        // 🔥 일괄 저장 함수 🔥
         async function saveAllDisplayedMatches() {
             let dateInput = document.getElementById('settings-date-input');
             let selectedDate = dateInput ? dateInput.value : todayStr;
@@ -828,7 +834,8 @@ ${textContent}
                     const homePitcher = document.getElementById(`home-pitcher-${matchId}`).value.trim();
                     const awayLineupStr = document.getElementById(`away-lineup-${matchId}`).value;
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
-                    const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 상세중계 링크 추출 (수정됨)
+                    const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 상세중계 링크 추출
+                    const lineupLink = document.getElementById(`lineup-link-${match.id}`).value.trim(); // 🔥 라인업 링크 추출
                     
                     const newTime = document.getElementById(`time-${matchId}`).value;
 
@@ -851,7 +858,8 @@ ${textContent}
                         homePitcher: homePitcher,
                         awayLineup: awayLineup,
                         homeLineup: homeLineup,
-                        broadcastLink: broadcastLink // 🔥 DB 저장 추가
+                        broadcastLink: broadcastLink, // 🔥 DB 저장
+                        lineupLink: lineupLink // 🔥 라인업 링크 DB 저장 추가
                     };
 
                     // 당장 저장하지 않고 배열에 안전하게 보관 (비동기 꼬임 방지)
