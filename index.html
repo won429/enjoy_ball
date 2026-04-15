@@ -402,6 +402,14 @@
                                         <span class="text-[10px] font-bold text-indigo-400 w-[42px] shrink-0 text-center leading-tight">라인업<br>링크</span>
                                         <input type="text" id="lineup-link-${match.id}" value="${live.lineupLink || ''}" placeholder="여기에 네이버 라인업 링크를 붙여넣으세요" class="flex-1 bg-indigo-900/20 text-white text-[11px] rounded border border-indigo-500/30 p-1.5 focus:border-indigo-500 outline-none">
                                     </div>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <span class="text-[10px] font-bold text-amber-400 w-[42px] shrink-0 text-center leading-tight">레이아웃<br>설정</span>
+                                        <select id="naver-offset-${match.id}" class="flex-1 bg-amber-900/20 text-white text-[11px] rounded border border-amber-500/30 p-1.5 focus:border-amber-500 outline-none">
+                                            <option value="auto" ${!live.naverOffsetMode || live.naverOffsetMode === 'auto' ? 'selected' : ''} class="text-black">자동 (종료 1시간 후 변경)</option>
+                                            <option value="ended" ${live.naverOffsetMode === 'ended' ? 'selected' : ''} class="text-black">ON (강제 종료화면)</option>
+                                            <option value="live" ${live.naverOffsetMode === 'live' ? 'selected' : ''} class="text-black">OFF (강제 경기중화면)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -836,6 +844,7 @@ ${textContent}
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
                     const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 상세중계 링크 추출
                     const lineupLink = document.getElementById(`lineup-link-${match.id}`).value.trim(); // 🔥 라인업 링크 추출
+                    const naverOffsetMode = document.getElementById(`naver-offset-${match.id}`).value;
                     
                     const newTime = document.getElementById(`time-${matchId}`).value;
 
@@ -849,6 +858,11 @@ ${textContent}
                         timeChangedAny = true;
                     }
 
+                    let liveData = liveDataStore[matchId] || {};
+                    let endTime = liveData.endTime || 0;
+                    if (status === '종료' && !endTime) endTime = Date.now();
+                    else if (status !== '종료') endTime = 0;
+
                     const matchData = {
                         gameStatus: status,
                         inning: inning,
@@ -859,7 +873,9 @@ ${textContent}
                         awayLineup: awayLineup,
                         homeLineup: homeLineup,
                         broadcastLink: broadcastLink, // 🔥 DB 저장
-                        lineupLink: lineupLink // 🔥 라인업 링크 DB 저장 추가
+                        lineupLink: lineupLink, // 🔥 라인업 링크 DB 저장 추가
+                        naverOffsetMode: naverOffsetMode,
+                        endTime: endTime
                     };
 
                     // 당장 저장하지 않고 배열에 안전하게 보관 (비동기 꼬임 방지)
