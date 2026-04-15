@@ -405,9 +405,10 @@
                                     <div class="flex items-center gap-2 mt-1">
                                         <span class="text-[10px] font-bold text-amber-400 w-[42px] shrink-0 text-center leading-tight">레이아웃<br>설정</span>
                                         <select id="naver-offset-${match.id}" class="flex-1 bg-amber-900/20 text-white text-[11px] rounded border border-amber-500/30 p-1.5 focus:border-amber-500 outline-none">
-                                            <option value="auto" ${!live.naverOffsetMode || live.naverOffsetMode === 'auto' ? 'selected' : ''} class="text-black">자동 (종료 1시간 후 변경)</option>
-                                            <option value="ended" ${live.naverOffsetMode === 'ended' ? 'selected' : ''} class="text-black">ON (강제 종료화면)</option>
-                                            <option value="live" ${live.naverOffsetMode === 'live' ? 'selected' : ''} class="text-black">OFF (강제 경기중화면)</option>
+                                            <option value="auto" ${!live.naverOffsetMode || live.naverOffsetMode === 'auto' ? 'selected' : ''} class="text-black">자동 (2시간 후 변경)</option>
+                                            <option value="ended" ${live.naverOffsetMode === 'ended' ? 'selected' : ''} class="text-black">강제 종료화면</option>
+                                            <option value="live" ${live.naverOffsetMode === 'live' ? 'selected' : ''} class="text-black">강제 경기중화면</option>
+                                            <option value="just_ended" ${live.naverOffsetMode === 'just_ended' ? 'selected' : ''} class="text-black">강제 종료직후화면</option>
                                         </select>
                                     </div>
                                 </div>
