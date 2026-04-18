@@ -402,10 +402,6 @@
                                         <span class="text-[10px] font-bold text-emerald-400 w-[42px] shrink-0 text-center leading-tight">상세중계<br>링크</span>
                                         <input type="text" id="broadcast-link-${match.id}" value="${live.broadcastLink || ''}" placeholder="여기에 네이버 상세중계 링크를 붙여넣으세요" class="flex-1 bg-emerald-900/20 text-white text-[11px] rounded border border-emerald-500/30 p-1.5 focus:border-emerald-500 outline-none">
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-[10px] font-bold text-indigo-400 w-[42px] shrink-0 text-center leading-tight">라인업<br>링크</span>
-                                        <input type="text" id="lineup-link-${match.id}" value="${live.lineupLink || ''}" placeholder="여기에 네이버 라인업 링크를 붙여넣으세요" class="flex-1 bg-indigo-900/20 text-white text-[11px] rounded border border-indigo-500/30 p-1.5 focus:border-indigo-500 outline-none">
-                                    </div>
                                     <div class="flex items-center gap-2 mt-1">
                                         <span class="text-[10px] font-bold text-amber-400 w-[42px] shrink-0 text-center leading-tight">레이아웃<br>설정</span>
                                         <select id="naver-offset-${match.id}" class="flex-1 bg-amber-900/20 text-white text-[11px] rounded border border-amber-500/30 p-1.5 focus:border-amber-500 outline-none">
@@ -849,7 +845,6 @@ ${textContent}
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
                     const broadcaster = document.getElementById(`broadcaster-${matchId}`) ? document.getElementById(`broadcaster-${matchId}`).value.trim() : ''; // 🔥 방송사 추출
                     const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 상세중계 링크 추출
-                    const lineupLink = document.getElementById(`lineup-link-${match.id}`).value.trim(); // 🔥 라인업 링크 추출
                     const naverOffsetMode = document.getElementById(`naver-offset-${match.id}`).value;
                     
                     const newTime = document.getElementById(`time-${matchId}`).value;
@@ -880,7 +875,6 @@ ${textContent}
                         homeLineup: homeLineup,
                         broadcaster: broadcaster, // 🔥 방송사 DB 저장 추가
                         broadcastLink: broadcastLink, // 🔥 DB 저장
-                        lineupLink: lineupLink, // 🔥 라인업 링크 DB 저장 추가
                         naverOffsetMode: naverOffsetMode,
                         endTime: endTime
                     };
