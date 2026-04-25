@@ -411,6 +411,10 @@
                                             <option value="just_ended" ${live.naverOffsetMode === 'just_ended' ? 'selected' : ''} class="text-black">강제 종료직후화면</option>
                                         </select>
                                     </div>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <span class="text-[10px] font-bold text-purple-400 w-[42px] shrink-0 text-center leading-tight">배너<br>링크</span>
+                                        <input type="text" id="banner-link-${match.id}" value="${live.bannerLink || ''}" placeholder="네이버 점수판(배너) 링크 입력" class="flex-1 bg-purple-900/20 text-white text-[11px] rounded border border-purple-500/30 p-1.5 focus:border-purple-500 outline-none">
+                                    </div>
                                 </div>
                             </div>
 
@@ -560,7 +564,7 @@
                 const proxyData = await proxyRes.json();
                 
                 if (!proxyData.contents) {
-                    throw new Error("웹페이지를 읽어올 수 정습니다. 유효한 중계 링크인지 확인해주세요.");
+                    throw new Error("웹페이지를 읽어올 수 없습니다. 유효한 중계 링크인지 확인해주세요.");
                 }
 
                 // 🔥 네이버 스포츠의 숨겨진 데이터(Script)까지 완벽하게 긁어오도록 로직 대폭 수정 🔥
@@ -844,7 +848,8 @@ ${textContent}
                     const awayLineupStr = document.getElementById(`away-lineup-${matchId}`).value;
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
                     const broadcaster = document.getElementById(`broadcaster-${matchId}`) ? document.getElementById(`broadcaster-${matchId}`).value.trim() : ''; // 🔥 방송사 추출
-                    const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 상세중계 링크 추출
+                    const broadcastLink = document.getElementById(`broadcast-link-${match.id}`).value.trim(); // 🔥 DB 저장
+                    const bannerLink = document.getElementById(`banner-link-${match.id}`) ? document.getElementById(`banner-link-${match.id}`).value.trim() : ''; // 🔥 배너 링크 추출
                     const naverOffsetMode = document.getElementById(`naver-offset-${match.id}`).value;
                     
                     const newTime = document.getElementById(`time-${matchId}`).value;
@@ -875,6 +880,7 @@ ${textContent}
                         homeLineup: homeLineup,
                         broadcaster: broadcaster, // 🔥 방송사 DB 저장 추가
                         broadcastLink: broadcastLink, // 🔥 DB 저장
+                        bannerLink: bannerLink, // 🔥 배너 링크 추가
                         naverOffsetMode: naverOffsetMode,
                         endTime: endTime
                     };
