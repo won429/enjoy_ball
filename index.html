@@ -413,6 +413,12 @@
                                         <span class="text-[10px] font-bold text-gray-400 w-[42px] shrink-0 text-center leading-tight">HOME<br>투수</span>
                                         <input type="text" id="home-pitcher-${match.id}" value="${live.homePitcher || ''}" placeholder="${match.team2} 투수" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
                                     </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] font-bold text-red-400 w-[42px] shrink-0 text-center leading-tight">승리<br>투수</span>
+                                        <input type="text" id="win-pitcher-${match.id}" value="${live.winPitcher || ''}" placeholder="승리 투수" class="flex-1 min-w-0 w-0 bg-red-900/20 text-white text-[11px] rounded border border-red-500/30 p-1.5 focus:border-red-500 outline-none">
+                                        <span class="text-[10px] font-bold text-blue-400 w-[42px] shrink-0 text-center leading-tight">패전<br>투수</span>
+                                        <input type="text" id="lose-pitcher-${match.id}" value="${live.losePitcher || ''}" placeholder="패전 투수" class="flex-1 min-w-0 w-0 bg-blue-900/20 text-white text-[11px] rounded border border-blue-500/30 p-1.5 focus:border-blue-500 outline-none">
+                                    </div>
                                 </div>
                                 <div class="flex flex-col gap-1.5 mt-1 border-t border-white/5 pt-2">
                                     <div class="flex items-center gap-2">
@@ -454,7 +460,7 @@
                                         <div class="flex flex-1 items-center gap-1 min-w-0">
                                             <span class="text-[9px] text-gray-500 shrink-0">HOME</span>
                                             <input type="number" id="home-pcount-${match.id}" value="${live.homePitcherCount !== undefined ? live.homePitcherCount : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
-        </div>
+                                        </div>
                                     </div>
 
                                     <!-- 이닝 점수 -->
@@ -702,7 +708,9 @@ ${textContent}
   "awayBase": 원정 볼넷 (숫자),
   "homeHit": 홈 안타 (숫자),
   "homeError": 홈 에러 (숫자),
-  "homeBase": 홈 볼넷 (숫자)
+  "homeBase": 홈 볼넷 (숫자),
+  "winPitcher": "승리 투수 이름 (종료 시에만, 없으면 빈문자열)",
+  "losePitcher": "패전 투수 이름 (종료 시에만, 없으면 빈문자열)"
 }`;
 
                 const payload = {
@@ -796,6 +804,14 @@ ${textContent}
                     if (data.homeHit !== undefined) document.getElementById(`home-hit-${matchId}`).value = data.homeHit;
                     if (data.homeError !== undefined) document.getElementById(`home-error-${matchId}`).value = data.homeError;
                     if (data.homeBase !== undefined) document.getElementById(`home-base-${matchId}`).value = data.homeBase;
+                    if (data.winPitcher !== undefined) {
+                        const wp = document.getElementById(`win-pitcher-${matchId}`);
+                        if (wp) wp.value = data.winPitcher;
+                    }
+                    if (data.losePitcher !== undefined) {
+                        const lp = document.getElementById(`lose-pitcher-${matchId}`);
+                        if (lp) lp.value = data.losePitcher;
+                    }
 
                     showToast('✅ 데이터 동기화 완료! 확인 후 [서버 저장]을 누르세요.');
                 } else {
@@ -1007,6 +1023,9 @@ ${textContent}
                     const homeError = document.getElementById(`home-error-${matchId}`) ? parseInt(document.getElementById(`home-error-${matchId}`).value) || 0 : 0;
                     const homeBase = document.getElementById(`home-base-${matchId}`) ? parseInt(document.getElementById(`home-base-${matchId}`).value) || 0 : 0;
 
+                    const winPitcher = document.getElementById(`win-pitcher-${matchId}`) ? document.getElementById(`win-pitcher-${matchId}`).value.trim() : '';
+                    const losePitcher = document.getElementById(`lose-pitcher-${matchId}`) ? document.getElementById(`lose-pitcher-${matchId}`).value.trim() : '';
+
                     // 시간 변경 감지
                     const matchIndex = scheduleData.findIndex(m => m.id === matchId);
                     if (matchIndex !== -1 && scheduleData[matchIndex].time !== newTime) {
@@ -1049,7 +1068,9 @@ ${textContent}
                         awayBase: awayBase,
                         homeHit: homeHit,
                         homeError: homeError,
-                        homeBase: homeBase
+                        homeBase: homeBase,
+                        winPitcher: winPitcher,
+                        losePitcher: losePitcher
                     };
 
                     // 당장 저장하지 않고 배열에 안전하게 보관 (비동기 꼬임 방지)
