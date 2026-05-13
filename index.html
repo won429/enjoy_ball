@@ -430,55 +430,57 @@
                                     <div class="text-[11px] font-bold text-blue-400 mb-1"><i class="fa-solid fa-chart-simple"></i> 실시간 스코어보드 & 상황 보드</div>
                                     
                                     <!-- BSO & 루상 -->
-                                    <div class="flex items-center gap-1.5">
+                                    <div class="flex items-center gap-1.5 overflow-hidden">
                                         <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">B S O</span>
-                                        <input type="number" id="ball-${match.id}" value="${live.ball !== undefined ? live.ball : 0}" min="0" max="3" class="w-8 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Ball">
-                                        <input type="number" id="strike-${match.id}" value="${live.strike !== undefined ? live.strike : 0}" min="0" max="2" class="w-8 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Strike">
-                                        <input type="number" id="out-${match.id}" value="${live.out !== undefined ? live.out : 0}" min="0" max="2" class="w-8 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Out">
+                                        <input type="number" id="ball-${match.id}" value="${live.ball !== undefined ? live.ball : 0}" min="0" max="3" class="w-8 shrink-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Ball">
+                                        <input type="number" id="strike-${match.id}" value="${live.strike !== undefined ? live.strike : 0}" min="0" max="2" class="w-8 shrink-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Strike">
+                                        <input type="number" id="out-${match.id}" value="${live.out !== undefined ? live.out : 0}" min="0" max="2" class="w-8 shrink-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Out">
                                         
-                                        <span class="text-[10px] font-bold text-gray-400 ml-2 shrink-0">루상</span>
-                                        <label class="flex items-center gap-1 text-[10px] text-gray-300"><input type="checkbox" id="base1-${match.id}" ${live.base1 ? 'checked' : ''} class="accent-point"> 1루</label>
-                                        <label class="flex items-center gap-1 text-[10px] text-gray-300"><input type="checkbox" id="base2-${match.id}" ${live.base2 ? 'checked' : ''} class="accent-point"> 2루</label>
-                                        <label class="flex items-center gap-1 text-[10px] text-gray-300"><input type="checkbox" id="base3-${match.id}" ${live.base3 ? 'checked' : ''} class="accent-point"> 3루</label>
+                                        <span class="text-[10px] font-bold text-gray-400 ml-1 shrink-0">루상</span>
+                                        <div class="flex flex-1 items-center justify-between min-w-0 gap-1 overflow-hidden">
+                                            <label class="flex items-center gap-0.5 text-[10px] text-gray-300 whitespace-nowrap"><input type="checkbox" id="base1-${match.id}" ${live.base1 ? 'checked' : ''} class="accent-point shrink-0"> 1루</label>
+                                            <label class="flex items-center gap-0.5 text-[10px] text-gray-300 whitespace-nowrap"><input type="checkbox" id="base2-${match.id}" ${live.base2 ? 'checked' : ''} class="accent-point shrink-0"> 2루</label>
+                                            <label class="flex items-center gap-0.5 text-[10px] text-gray-300 whitespace-nowrap"><input type="checkbox" id="base3-${match.id}" ${live.base3 ? 'checked' : ''} class="accent-point shrink-0"> 3루</label>
+                                        </div>
                                     </div>
                                     
                                     <!-- 투구수 -->
                                     <div class="flex items-center gap-1.5 mt-0.5">
                                         <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">투구수</span>
-                                        <div class="flex flex-1 items-center gap-1">
-                                            <span class="text-[9px] text-gray-500">AWAY</span>
-                                            <input type="number" id="away-pcount-${match.id}" value="${live.awayPitcherCount !== undefined ? live.awayPitcherCount : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
+                                        <div class="flex flex-1 items-center gap-1 min-w-0">
+                                            <span class="text-[9px] text-gray-500 shrink-0">AWAY</span>
+                                            <input type="number" id="away-pcount-${match.id}" value="${live.awayPitcherCount !== undefined ? live.awayPitcherCount : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
                                         </div>
-                                        <div class="flex flex-1 items-center gap-1">
-                                            <span class="text-[9px] text-gray-500">HOME</span>
-                                            <input type="number" id="home-pcount-${match.id}" value="${live.homePitcherCount !== undefined ? live.homePitcherCount : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
-                                        </div>
+                                        <div class="flex flex-1 items-center gap-1 min-w-0">
+                                            <span class="text-[9px] text-gray-500 shrink-0">HOME</span>
+                                            <input type="number" id="home-pcount-${match.id}" value="${live.homePitcherCount !== undefined ? live.homePitcherCount : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
+        </div>
                                     </div>
 
                                     <!-- 이닝 점수 -->
                                     <div class="flex flex-col gap-1 mt-1 border-t border-blue-500/20 pt-1.5">
                                         <div class="flex items-center gap-1.5">
                                             <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">A 이닝</span>
-                                            <input type="text" id="away-inning-${match.id}" value="${(live.awayInning || []).join(',')}" placeholder="예: 0,0,1,0,2,-,-,-,-" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1.5 focus:border-point outline-none tracking-widest font-mono">
+                                            <input type="text" id="away-inning-${match.id}" value="${(live.awayInning || []).join(',')}" placeholder="예: 0,0,1,0,2,-,-,-,-" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1.5 focus:border-point outline-none tracking-widest font-mono">
                                         </div>
                                         <div class="flex items-center gap-1.5">
                                             <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">H 이닝</span>
-                                            <input type="text" id="home-inning-${match.id}" value="${(live.homeInning || []).join(',')}" placeholder="예: 0,0,0,1,0,-,-,-,-" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1.5 focus:border-point outline-none tracking-widest font-mono">
+                                            <input type="text" id="home-inning-${match.id}" value="${(live.homeInning || []).join(',')}" placeholder="예: 0,0,0,1,0,-,-,-,-" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1.5 focus:border-point outline-none tracking-widest font-mono">
                                         </div>
                                     </div>
 
                                     <!-- H E B -->
                                     <div class="flex items-center gap-1.5 mt-1 border-t border-blue-500/20 pt-1.5">
                                         <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center leading-tight">AWAY<br>H E B</span>
-                                        <input type="number" id="away-hit-${match.id}" value="${live.awayHit !== undefined ? live.awayHit : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Hit">
-                                        <input type="number" id="away-error-${match.id}" value="${live.awayError !== undefined ? live.awayError : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Error">
-                                        <input type="number" id="away-base-${match.id}" value="${live.awayBase !== undefined ? live.awayBase : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Base">
+                                        <input type="number" id="away-hit-${match.id}" value="${live.awayHit !== undefined ? live.awayHit : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Hit">
+                                        <input type="number" id="away-error-${match.id}" value="${live.awayError !== undefined ? live.awayError : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Error">
+                                        <input type="number" id="away-base-${match.id}" value="${live.awayBase !== undefined ? live.awayBase : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Base">
                                     </div>
                                     <div class="flex items-center gap-1.5 mt-0.5">
                                         <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center leading-tight">HOME<br>H E B</span>
-                                        <input type="number" id="home-hit-${match.id}" value="${live.homeHit !== undefined ? live.homeHit : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Hit">
-                                        <input type="number" id="home-error-${match.id}" value="${live.homeError !== undefined ? live.homeError : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Error">
-                                        <input type="number" id="home-base-${match.id}" value="${live.homeBase !== undefined ? live.homeBase : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Base">
+                                        <input type="number" id="home-hit-${match.id}" value="${live.homeHit !== undefined ? live.homeHit : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Hit">
+                                        <input type="number" id="home-error-${match.id}" value="${live.homeError !== undefined ? live.homeError : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Error">
+                                        <input type="number" id="home-base-${match.id}" value="${live.homeBase !== undefined ? live.homeBase : 0}" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Base">
                                     </div>
                                 </div>
 
@@ -1026,9 +1028,9 @@ ${textContent}
                         homePitcher: homePitcher,
                         awayLineup: awayLineup,
                         homeLineup: homeLineup,
-                        broadcaster: broadcaster,
-                        broadcastLink: broadcastLink,
-                        bannerLink: bannerLink,
+                        broadcaster: broadcaster, // 🔥 방송사 DB 저장 추가
+                        broadcastLink: broadcastLink, // 🔥 DB 저장
+                        bannerLink: bannerLink, // 🔥 배너 링크 추가
                         naverOffsetMode: naverOffsetMode,
                         endTime: endTime,
                         // 새로 추가된 실시간 데이터 필드들
