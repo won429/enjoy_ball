@@ -44,6 +44,13 @@
 <body class="w-full min-h-[100dvh] flex justify-center items-start overflow-y-auto pb-20">
 
     <div id="mobile-wrapper" class="w-full h-full max-w-[500px] relative flex flex-col pt-8 px-5">
+        
+        <!-- 🔥 추가된 로딩 화면 (전체 화면 덮도록 수정) 🔥 -->
+        <div id="initial-loader" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-[#050505] transition-opacity duration-500">
+            <i class="fa-solid fa-spinner fa-spin text-4xl text-point mb-4 opacity-80"></i>
+            <span class="text-sm font-bold text-white tracking-widest animate-pulse">데이터를 불러오는 중...</span>
+        </div>
+
         <div class="flex items-center justify-center gap-2 mb-8 mt-4 relative">
             <i class="fa-solid fa-server text-point text-2xl"></i>
             <h1 class="text-2xl font-black text-white tracking-tight">KBO 관리자 대시보드</h1>
@@ -79,6 +86,10 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        
+        // 🔥 추가: 외부 접속 환경(보안 네트워크 등)에서 발생하는 Firestore 무한 대기/타임아웃 에러 완벽 우회 🔥
+        db.settings({ experimentalForceLongPolling: true, useFetchStreams: false });
+        
         const auth = firebase.auth(); // 🔥 인증 모듈 초기화
 
         let scheduleData = [];
@@ -178,6 +189,19 @@
         }
 
         async function syncWithFirestore() {
+            // 🔥 로딩 화면 표시 🔥
+            const loader = document.getElementById('initial-loader');
+            if (loader) { loader.classList.remove('hidden'); loader.classList.add('flex'); }
+
+            // 🔥 무한 로딩 방지용 8초 안전 장치 (8초 후 강제로 화면 띄움) 🔥
+            const fallbackTimer = setTimeout(() => {
+                if (loader && !loader.classList.contains('hidden')) {
+                    loader.classList.add('hidden'); loader.classList.remove('flex');
+                    if (isSettingsUnlocked) renderSettings();
+                    showToast('네트워크 응답이 느려 강제로 대시보드 화면을 표시합니다.');
+                }
+            }, 8000);
+
             try {
                 // 🔥 1. 경기 일정 합치기 (matches_merged) 연동 🔥
                 const mergedMatchesSnap = await db.collection("matches_merged").get();
@@ -240,11 +264,19 @@
                 // 🔥 3. 처음에 '선택된 날짜' 경기만 실시간 연동 시작 🔥
                 let dateInput = document.getElementById('settings-date-input');
                 let initialDate = dateInput ? dateInput.value : todayStr;
+                
+                // 🔥 데이터 불러오기 완료 직후 대시보드 화면 렌더링 강제 호출 (페이지 안 넘어감 완벽 해결) 🔥
+                if (isSettingsUnlocked) renderSettings();
+
                 listenToDateMatches(initialDate);
 
             } catch (error) {
                 console.error("통신 에러:", error);
                 showToast("데이터를 불러오지 못했습니다. 권한을 확인하세요.");
+            } finally {
+                clearTimeout(fallbackTimer); // 통신이 정상적으로 완료되면 타이머 해제
+                // 🔥 로딩 화면 숨김 처리 🔥
+                if (loader) { loader.classList.add('hidden'); loader.classList.remove('flex'); }
             }
         }
 
@@ -392,6 +424,64 @@
                                         <input type="text" id="home-lineup-${match.id}" value="${(live.homeLineup || []).join(', ')}" placeholder="${match.team2} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
                                     </div>
                                 </div>
+
+                                <!-- 🔥 스코어보드 & 실시간 상황 관리 영역 추가 🔥 -->
+                                <div class="flex flex-col gap-1.5 mt-2 pt-2.5 border-t border-white/5 bg-blue-900/10 rounded-xl p-2 border border-blue-500/20">
+                                    <div class="text-[11px] font-bold text-blue-400 mb-1"><i class="fa-solid fa-chart-simple"></i> 실시간 스코어보드 & 상황 보드</div>
+                                    
+                                    <!-- BSO & 루상 -->
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">B S O</span>
+                                        <input type="number" id="ball-${match.id}" value="${live.ball !== undefined ? live.ball : 0}" min="0" max="3" class="w-8 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Ball">
+                                        <input type="number" id="strike-${match.id}" value="${live.strike !== undefined ? live.strike : 0}" min="0" max="2" class="w-8 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Strike">
+                                        <input type="number" id="out-${match.id}" value="${live.out !== undefined ? live.out : 0}" min="0" max="2" class="w-8 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Out">
+                                        
+                                        <span class="text-[10px] font-bold text-gray-400 ml-2 shrink-0">루상</span>
+                                        <label class="flex items-center gap-1 text-[10px] text-gray-300"><input type="checkbox" id="base1-${match.id}" ${live.base1 ? 'checked' : ''} class="accent-point"> 1루</label>
+                                        <label class="flex items-center gap-1 text-[10px] text-gray-300"><input type="checkbox" id="base2-${match.id}" ${live.base2 ? 'checked' : ''} class="accent-point"> 2루</label>
+                                        <label class="flex items-center gap-1 text-[10px] text-gray-300"><input type="checkbox" id="base3-${match.id}" ${live.base3 ? 'checked' : ''} class="accent-point"> 3루</label>
+                                    </div>
+                                    
+                                    <!-- 투구수 -->
+                                    <div class="flex items-center gap-1.5 mt-0.5">
+                                        <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">투구수</span>
+                                        <div class="flex flex-1 items-center gap-1">
+                                            <span class="text-[9px] text-gray-500">AWAY</span>
+                                            <input type="number" id="away-pcount-${match.id}" value="${live.awayPitcherCount !== undefined ? live.awayPitcherCount : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
+                                        </div>
+                                        <div class="flex flex-1 items-center gap-1">
+                                            <span class="text-[9px] text-gray-500">HOME</span>
+                                            <input type="number" id="home-pcount-${match.id}" value="${live.homePitcherCount !== undefined ? live.homePitcherCount : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 focus:border-point outline-none text-center">
+                                        </div>
+                                    </div>
+
+                                    <!-- 이닝 점수 -->
+                                    <div class="flex flex-col gap-1 mt-1 border-t border-blue-500/20 pt-1.5">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">A 이닝</span>
+                                            <input type="text" id="away-inning-${match.id}" value="${(live.awayInning || []).join(',')}" placeholder="예: 0,0,1,0,2,-,-,-,-" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1.5 focus:border-point outline-none tracking-widest font-mono">
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">H 이닝</span>
+                                            <input type="text" id="home-inning-${match.id}" value="${(live.homeInning || []).join(',')}" placeholder="예: 0,0,0,1,0,-,-,-,-" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1.5 focus:border-point outline-none tracking-widest font-mono">
+                                        </div>
+                                    </div>
+
+                                    <!-- H E B -->
+                                    <div class="flex items-center gap-1.5 mt-1 border-t border-blue-500/20 pt-1.5">
+                                        <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center leading-tight">AWAY<br>H E B</span>
+                                        <input type="number" id="away-hit-${match.id}" value="${live.awayHit !== undefined ? live.awayHit : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Hit">
+                                        <input type="number" id="away-error-${match.id}" value="${live.awayError !== undefined ? live.awayError : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Error">
+                                        <input type="number" id="away-base-${match.id}" value="${live.awayBase !== undefined ? live.awayBase : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Base">
+                                    </div>
+                                    <div class="flex items-center gap-1.5 mt-0.5">
+                                        <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center leading-tight">HOME<br>H E B</span>
+                                        <input type="number" id="home-hit-${match.id}" value="${live.homeHit !== undefined ? live.homeHit : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Hit">
+                                        <input type="number" id="home-error-${match.id}" value="${live.homeError !== undefined ? live.homeError : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Error">
+                                        <input type="number" id="home-base-${match.id}" value="${live.homeBase !== undefined ? live.homeBase : 0}" class="flex-1 bg-black/50 text-white text-[11px] rounded border border-white/10 p-1 text-center focus:border-point outline-none" title="Base">
+                                    </div>
+                                </div>
+
                                 <!-- 🔥 상세중계 및 라인업 전용 링크 입력란 (분리된 공간) 🔥 -->
                                 <div class="flex flex-col gap-1.5 mt-2 pt-2.5 border-t border-white/5">
                                     <div class="flex items-center gap-2">
@@ -594,7 +684,23 @@ ${textContent}
   "awayPitcher": "${team1} 선발투수 이름",
   "homePitcher": "${team2} 선발투수 이름",
   "awayLineup": "${team1} 선발타자 1번~9번 이름 (쉼표로 구분)",
-  "homeLineup": "${team2} 선발타자 1번~9번 이름 (쉼표로 구분)"
+  "homeLineup": "${team2} 선발타자 1번~9번 이름 (쉼표로 구분)",
+  "ball": 현재 볼 카운트 (숫자),
+  "strike": 현재 스트라이크 카운트 (숫자),
+  "out": 현재 아웃 카운트 (숫자),
+  "base1": 1루 주자 여부 (true/false),
+  "base2": 2루 주자 여부 (true/false),
+  "base3": 3루 주자 여부 (true/false),
+  "awayPitcherCount": 원정 투수 투구수 (숫자),
+  "homePitcherCount": 홈 투수 투구수 (숫자),
+  "awayInning": ["0", "0", "1", "-", "-", "-", "-", "-", "-"],
+  "homeInning": ["0", "0", "0", "-", "-", "-", "-", "-", "-"],
+  "awayHit": 원정 안타 (숫자),
+  "awayError": 원정 에러 (숫자),
+  "awayBase": 원정 볼넷 (숫자),
+  "homeHit": 홈 안타 (숫자),
+  "homeError": 홈 에러 (숫자),
+  "homeBase": 홈 볼넷 (숫자)
 }`;
 
                 const payload = {
@@ -672,6 +778,23 @@ ${textContent}
                     if (data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
                     if (data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
                     
+                    if (data.ball !== undefined) document.getElementById(`ball-${matchId}`).value = data.ball;
+                    if (data.strike !== undefined) document.getElementById(`strike-${matchId}`).value = data.strike;
+                    if (data.out !== undefined) document.getElementById(`out-${matchId}`).value = data.out;
+                    if (data.base1 !== undefined) document.getElementById(`base1-${matchId}`).checked = data.base1;
+                    if (data.base2 !== undefined) document.getElementById(`base2-${matchId}`).checked = data.base2;
+                    if (data.base3 !== undefined) document.getElementById(`base3-${matchId}`).checked = data.base3;
+                    if (data.awayPitcherCount !== undefined) document.getElementById(`away-pcount-${matchId}`).value = data.awayPitcherCount;
+                    if (data.homePitcherCount !== undefined) document.getElementById(`home-pcount-${matchId}`).value = data.homePitcherCount;
+                    if (data.awayInning !== undefined && Array.isArray(data.awayInning)) document.getElementById(`away-inning-${matchId}`).value = data.awayInning.join(',');
+                    if (data.homeInning !== undefined && Array.isArray(data.homeInning)) document.getElementById(`home-inning-${matchId}`).value = data.homeInning.join(',');
+                    if (data.awayHit !== undefined) document.getElementById(`away-hit-${matchId}`).value = data.awayHit;
+                    if (data.awayError !== undefined) document.getElementById(`away-error-${matchId}`).value = data.awayError;
+                    if (data.awayBase !== undefined) document.getElementById(`away-base-${matchId}`).value = data.awayBase;
+                    if (data.homeHit !== undefined) document.getElementById(`home-hit-${matchId}`).value = data.homeHit;
+                    if (data.homeError !== undefined) document.getElementById(`home-error-${matchId}`).value = data.homeError;
+                    if (data.homeBase !== undefined) document.getElementById(`home-base-${matchId}`).value = data.homeBase;
+
                     showToast('✅ 데이터 동기화 완료! 확인 후 [서버 저장]을 누르세요.');
                 } else {
                     throw new Error("웹페이지에서 데이터를 찾지 못했습니다.");
@@ -857,6 +980,31 @@ ${textContent}
                     const awayLineup = awayLineupStr ? awayLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
                     const homeLineup = homeLineupStr ? homeLineupStr.split(',').map(s => s.trim()).filter(s => s !== '') : [];
 
+                    // 🔥 새로운 실시간 스코어보드 값 추출 🔥
+                    const ball = document.getElementById(`ball-${matchId}`) ? parseInt(document.getElementById(`ball-${matchId}`).value) || 0 : 0;
+                    const strike = document.getElementById(`strike-${matchId}`) ? parseInt(document.getElementById(`strike-${matchId}`).value) || 0 : 0;
+                    const out = document.getElementById(`out-${matchId}`) ? parseInt(document.getElementById(`out-${matchId}`).value) || 0 : 0;
+                    
+                    const base1 = document.getElementById(`base1-${matchId}`) ? document.getElementById(`base1-${matchId}`).checked : false;
+                    const base2 = document.getElementById(`base2-${matchId}`) ? document.getElementById(`base2-${matchId}`).checked : false;
+                    const base3 = document.getElementById(`base3-${matchId}`) ? document.getElementById(`base3-${matchId}`).checked : false;
+                    
+                    const awayPitcherCount = document.getElementById(`away-pcount-${matchId}`) ? parseInt(document.getElementById(`away-pcount-${matchId}`).value) || 0 : 0;
+                    const homePitcherCount = document.getElementById(`home-pcount-${matchId}`) ? parseInt(document.getElementById(`home-pcount-${matchId}`).value) || 0 : 0;
+                    
+                    const awayInningStr = document.getElementById(`away-inning-${matchId}`) ? document.getElementById(`away-inning-${matchId}`).value : "";
+                    const homeInningStr = document.getElementById(`home-inning-${matchId}`) ? document.getElementById(`home-inning-${matchId}`).value : "";
+                    const awayInning = awayInningStr ? awayInningStr.split(',').map(s => s.trim()) : [];
+                    const homeInning = homeInningStr ? homeInningStr.split(',').map(s => s.trim()) : [];
+                    
+                    const awayHit = document.getElementById(`away-hit-${matchId}`) ? parseInt(document.getElementById(`away-hit-${matchId}`).value) || 0 : 0;
+                    const awayError = document.getElementById(`away-error-${matchId}`) ? parseInt(document.getElementById(`away-error-${matchId}`).value) || 0 : 0;
+                    const awayBase = document.getElementById(`away-base-${matchId}`) ? parseInt(document.getElementById(`away-base-${matchId}`).value) || 0 : 0;
+                    
+                    const homeHit = document.getElementById(`home-hit-${matchId}`) ? parseInt(document.getElementById(`home-hit-${matchId}`).value) || 0 : 0;
+                    const homeError = document.getElementById(`home-error-${matchId}`) ? parseInt(document.getElementById(`home-error-${matchId}`).value) || 0 : 0;
+                    const homeBase = document.getElementById(`home-base-${matchId}`) ? parseInt(document.getElementById(`home-base-${matchId}`).value) || 0 : 0;
+
                     // 시간 변경 감지
                     const matchIndex = scheduleData.findIndex(m => m.id === matchId);
                     if (matchIndex !== -1 && scheduleData[matchIndex].time !== newTime) {
@@ -878,11 +1026,28 @@ ${textContent}
                         homePitcher: homePitcher,
                         awayLineup: awayLineup,
                         homeLineup: homeLineup,
-                        broadcaster: broadcaster, // 🔥 방송사 DB 저장 추가
-                        broadcastLink: broadcastLink, // 🔥 DB 저장
-                        bannerLink: bannerLink, // 🔥 배너 링크 추가
+                        broadcaster: broadcaster,
+                        broadcastLink: broadcastLink,
+                        bannerLink: bannerLink,
                         naverOffsetMode: naverOffsetMode,
-                        endTime: endTime
+                        endTime: endTime,
+                        // 새로 추가된 실시간 데이터 필드들
+                        ball: ball,
+                        strike: strike,
+                        out: out,
+                        base1: base1,
+                        base2: base2,
+                        base3: base3,
+                        awayPitcherCount: awayPitcherCount,
+                        homePitcherCount: homePitcherCount,
+                        awayInning: awayInning,
+                        homeInning: homeInning,
+                        awayHit: awayHit,
+                        awayError: awayError,
+                        awayBase: awayBase,
+                        homeHit: homeHit,
+                        homeError: homeError,
+                        homeBase: homeBase
                     };
 
                     // 당장 저장하지 않고 배열에 안전하게 보관 (비동기 꼬임 방지)
