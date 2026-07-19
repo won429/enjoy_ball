@@ -172,7 +172,7 @@
                     </div>
                     <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_48px_28px] items-center gap-1.5">
                         <select data-field="role" class="min-w-0 bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">${roleOptions}</select>
-                        <input type="text" data-field="position" value="${escapeHtml(item.position)}" placeholder="포지션" class="min-w-0 bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                        <select data-field="position" title="교체 후 수비 위치" class="min-w-0 bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">${defensePositionOptions(item.position)}</select>
                         <input type="number" data-field="order" value="${escapeHtml(item.order)}" min="1" max="9" placeholder="타순" title="타순" class="w-full bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 text-center focus:border-emerald-400 outline-none">
                         <button type="button" onclick="removeSubstitutionRow(this)" title="교체 선수 삭제" class="h-7 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all"><i class="fa-solid fa-xmark"></i></button>
                     </div>
@@ -628,7 +628,7 @@
                                             <div id="sub-list-home-${match.id}" class="space-y-1.5">${substitutionRowsHtml(match.id, 'home', homeSubstitutions)}</div>
                                         </section>
                                     </div>
-                                    <p class="text-[9px] leading-relaxed text-gray-500">기존 선수 → 교체 선수 순서로 입력하세요. 포지션·타순을 비우면 기존 선수 값을 자동으로 이어받습니다.</p>
+                                    <p class="text-[9px] leading-relaxed text-gray-500">기존 선수 → 교체 선수 순서로 입력하면 기존 선수는 현재 수비에서 빠지고 교체 선수가 선택한 위치에 들어갑니다. 포지션·타순을 비우면 기존 선수 값을 이어받습니다.</p>
                                 </div>
 
                                 <!-- 🔥 스코어보드 & 실시간 상황 관리 영역 추가 🔥 -->
