@@ -126,6 +126,78 @@
             }, 3500); 
         }
 
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            })[char]);
+        }
+
+        function normalizeSubstitution(raw) {
+            if (!raw || typeof raw !== 'object') return {};
+            return {
+                outName: raw.outName || raw.out || raw.replacedPlayer || raw.previousPlayer || '',
+                inName: raw.inName || raw.in || raw.player || raw.name || raw.newPlayer || '',
+                role: raw.role || raw.type || raw.reason || '교체',
+                position: raw.position || raw.pos || '',
+                order: raw.order ?? raw.battingOrder ?? raw.batOrder ?? ''
+            };
+        }
+
+        function substitutionRowHtml(matchId, side, raw = {}) {
+            const item = normalizeSubstitution(raw);
+            const roles = ['교체', '대타', '대주자', '수비교체', '투수교체'];
+            const roleOptions = roles.map(role =>
+                `<option value="${role}" ${item.role === role ? 'selected' : ''} class="text-black">${role}</option>`
+            ).join('');
+
+            return `
+                <div class="substitution-row rounded-lg border border-white/10 bg-black/25 p-2 space-y-1.5">
+                    <div class="grid grid-cols-[minmax(0,1fr)_18px_minmax(0,1fr)] items-center gap-1.5">
+                        <input type="text" data-field="outName" value="${escapeHtml(item.outName)}" placeholder="기존 선수" class="min-w-0 bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                        <i class="fa-solid fa-arrow-right text-center text-[9px] text-emerald-400"></i>
+                        <input type="text" data-field="inName" value="${escapeHtml(item.inName)}" placeholder="교체 선수" class="min-w-0 bg-emerald-900/20 text-white text-[10px] rounded border border-emerald-500/30 p-1.5 focus:border-emerald-400 outline-none">
+                    </div>
+                    <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_48px_28px] items-center gap-1.5">
+                        <select data-field="role" class="min-w-0 bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">${roleOptions}</select>
+                        <input type="text" data-field="position" value="${escapeHtml(item.position)}" placeholder="포지션" class="min-w-0 bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                        <input type="number" data-field="order" value="${escapeHtml(item.order)}" min="1" max="9" placeholder="타순" title="타순" class="w-full bg-white/10 text-white text-[10px] rounded border border-white/15 p-1.5 text-center focus:border-emerald-400 outline-none">
+                        <button type="button" onclick="removeSubstitutionRow(this)" title="교체 선수 삭제" class="h-7 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>`;
+        }
+
+        function substitutionRowsHtml(matchId, side, items) {
+            return (Array.isArray(items) ? items : []).map(item => substitutionRowHtml(matchId, side, item)).join('');
+        }
+
+        function addSubstitutionRow(matchId, side) {
+            const container = document.getElementById(`sub-list-${side}-${matchId}`);
+            if (container) container.insertAdjacentHTML('beforeend', substitutionRowHtml(matchId, side));
+        }
+
+        function removeSubstitutionRow(button) {
+            const row = button.closest('.substitution-row');
+            if (row) row.remove();
+        }
+
+        function collectSubstitutions(matchId, side) {
+            const container = document.getElementById(`sub-list-${side}-${matchId}`);
+            if (!container) return [];
+
+            return Array.from(container.querySelectorAll('.substitution-row')).map(row => {
+                const read = field => (row.querySelector(`[data-field="${field}"]`)?.value || '').trim();
+                const orderValue = parseInt(read('order'), 10);
+                const item = {
+                    outName: read('outName'),
+                    inName: read('inName'),
+                    role: read('role') || '교체',
+                    position: read('position')
+                };
+                if (Number.isInteger(orderValue) && orderValue >= 1 && orderValue <= 9) item.order = orderValue;
+                return item;
+            }).filter(item => item.inName);
+        }
+
         // 🔥 로그인 상태 감지 리스너 🔥
         auth.onAuthStateChanged(user => {
             if (user) {
@@ -334,6 +406,8 @@
             } else {
                 matches.forEach(match => {
                     let live = liveDataStore[match.id] || { gameStatus: '경기전', awayScore: 0, homeScore: 0 };
+                    const awaySubstitutions = live.awaySubstitutions || live.awayChanges || live.awayReplacements || [];
+                    const homeSubstitutions = live.homeSubstitutions || live.homeChanges || live.homeReplacements || [];
                     
                     let inningOptionsHtml = `<option value="" class="text-black">-</option>`;
                     for (let i = 1; i <= 15; i++) {
@@ -396,6 +470,40 @@
                                         <span class="text-[10px] font-bold text-gray-400 w-[42px] shrink-0 text-center leading-tight">HOME<br>타자</span>
                                         <input type="text" id="home-lineup-${match.id}" value="${(live.homeLineup || []).join(', ')}" placeholder="${match.team2} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
                                     </div>
+                                </div>
+
+                                <div class="flex flex-col gap-2 mt-2 pt-2.5 border-t border-white/5 rounded-xl bg-emerald-950/20 p-2 border border-emerald-500/20">
+                                    <div class="flex items-center justify-between">
+                                        <div class="text-[11px] font-bold text-emerald-400"><i class="fa-solid fa-person-running mr-1"></i> 현재 타자 · 선수 교체</div>
+                                        <span class="text-[9px] text-gray-500">메인 중계/라인업에 즉시 반영</span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-1.5">
+                                        <label class="min-w-0">
+                                            <span class="block text-[9px] font-bold text-gray-400 mb-1">AWAY 현재 타자</span>
+                                            <input type="text" id="away-current-batter-${match.id}" value="${escapeHtml(live.awayCurrentBatter || live.awayBatter || '')}" placeholder="${match.team1} 타자" class="w-full min-w-0 bg-black/40 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                                        </label>
+                                        <label class="min-w-0">
+                                            <span class="block text-[9px] font-bold text-gray-400 mb-1">HOME 현재 타자</span>
+                                            <input type="text" id="home-current-batter-${match.id}" value="${escapeHtml(live.homeCurrentBatter || live.homeBatter || '')}" placeholder="${match.team2} 타자" class="w-full min-w-0 bg-black/40 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                                        </label>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <section class="min-w-0 rounded-lg border border-white/10 bg-black/20 p-1.5">
+                                            <div class="flex items-center justify-between mb-1.5">
+                                                <span class="text-[10px] font-bold text-gray-300">AWAY 교체</span>
+                                                <button type="button" onclick="addSubstitutionRow(${match.id}, 'away')" class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-bold text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all"><i class="fa-solid fa-plus mr-0.5"></i> 추가</button>
+                                            </div>
+                                            <div id="sub-list-away-${match.id}" class="space-y-1.5">${substitutionRowsHtml(match.id, 'away', awaySubstitutions)}</div>
+                                        </section>
+                                        <section class="min-w-0 rounded-lg border border-white/10 bg-black/20 p-1.5">
+                                            <div class="flex items-center justify-between mb-1.5">
+                                                <span class="text-[10px] font-bold text-gray-300">HOME 교체</span>
+                                                <button type="button" onclick="addSubstitutionRow(${match.id}, 'home')" class="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-bold text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all"><i class="fa-solid fa-plus mr-0.5"></i> 추가</button>
+                                            </div>
+                                            <div id="sub-list-home-${match.id}" class="space-y-1.5">${substitutionRowsHtml(match.id, 'home', homeSubstitutions)}</div>
+                                        </section>
+                                    </div>
+                                    <p class="text-[9px] leading-relaxed text-gray-500">기존 선수 → 교체 선수 순서로 입력하세요. 포지션·타순을 비우면 기존 선수 값을 자동으로 이어받습니다.</p>
                                 </div>
 
                                 <!-- 🔥 스코어보드 & 실시간 상황 관리 영역 추가 🔥 -->
@@ -652,6 +760,8 @@ ${textContent}
   "homeScore": ${team2}의 현재 점수 (숫자만, 없으면 0),
   "awayPitcher": "${team1} 선발투수 이름",
   "homePitcher": "${team2} 선발투수 이름",
+  "awayCurrentBatter": "${team1}의 현재 타자 이름 (공격 중이 아니거나 확인 불가면 빈문자열)",
+  "homeCurrentBatter": "${team2}의 현재 타자 이름 (공격 중이 아니거나 확인 불가면 빈문자열)",
   "awayLineup": "${team1} 선발타자 1번~9번 이름 (쉼표로 구분)",
   "homeLineup": "${team2} 선발타자 1번~9번 이름 (쉼표로 구분)",
   "ball": 현재 볼 카운트 (숫자),
@@ -744,6 +854,8 @@ ${textContent}
                     
                     if (data.awayPitcher) document.getElementById(`away-pitcher-${matchId}`).value = data.awayPitcher;
                     if (data.homePitcher) document.getElementById(`home-pitcher-${matchId}`).value = data.homePitcher;
+                    if (data.awayCurrentBatter !== undefined) document.getElementById(`away-current-batter-${matchId}`).value = data.awayCurrentBatter;
+                    if (data.homeCurrentBatter !== undefined) document.getElementById(`home-current-batter-${matchId}`).value = data.homeCurrentBatter;
                     if (data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
                     if (data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
                     
@@ -943,6 +1055,10 @@ ${textContent}
                     const homePitcher = document.getElementById(`home-pitcher-${matchId}`).value.trim();
                     const awayLineupStr = document.getElementById(`away-lineup-${matchId}`).value;
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
+                    const awayCurrentBatter = document.getElementById(`away-current-batter-${matchId}`)?.value.trim() || '';
+                    const homeCurrentBatter = document.getElementById(`home-current-batter-${matchId}`)?.value.trim() || '';
+                    const awaySubstitutions = collectSubstitutions(matchId, 'away');
+                    const homeSubstitutions = collectSubstitutions(matchId, 'home');
                     const broadcaster = document.getElementById(`broadcaster-${matchId}`) ? document.getElementById(`broadcaster-${matchId}`).value.trim() : ''; 
                     const broadcastLink = document.getElementById(`broadcast-link-${match.id}`) ? document.getElementById(`broadcast-link-${match.id}`).value.trim() : ''; 
                     const naverOffsetMode = document.getElementById(`naver-offset-${match.id}`) ? document.getElementById(`naver-offset-${match.id}`).value : '';
@@ -990,6 +1106,7 @@ ${textContent}
                     else if (status !== '종료') endTime = 0;
 
                     const matchData = {
+                        ...liveData,
                         id: matchId,
                         naverGameId: match.naverGameId || "",
                         stadium: match.stadium || "",
@@ -1008,6 +1125,10 @@ ${textContent}
                         homePitcherCount: homePitcherCount,
                         awayLineup: awayLineup,
                         homeLineup: homeLineup,
+                        awayCurrentBatter: awayCurrentBatter,
+                        homeCurrentBatter: homeCurrentBatter,
+                        awaySubstitutions: awaySubstitutions,
+                        homeSubstitutions: homeSubstitutions,
                         awayInning: awayInning,
                         homeInning: homeInning,
                         awayHit: awayHit,
