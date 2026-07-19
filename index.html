@@ -137,6 +137,14 @@
             return raw && typeof raw === 'object' ? (raw.name || raw.playerName || '') : raw;
         }
 
+        function liveBatterSide(live, side) {
+            const raw = live[`${side}CurrentBatterSide`] || live[`${side}BatterSide`] || '';
+            const value = String(raw).toUpperCase();
+            if (value.includes('좌') || value === 'L' || value.includes('LEFT')) return '좌타';
+            if (value.includes('우') || value === 'R' || value.includes('RIGHT')) return '우타';
+            return '';
+        }
+
         function normalizeSubstitution(raw) {
             if (!raw || typeof raw !== 'object') return {};
             return {
@@ -485,11 +493,17 @@
                                     <div class="grid grid-cols-2 gap-1.5">
                                         <label class="min-w-0">
                                             <span class="block text-[9px] font-bold text-gray-400 mb-1">AWAY 현재 타자</span>
-                                            <input type="text" id="away-current-batter-${match.id}" value="${escapeHtml(live.awayCurrentBatter || live.awayBatter || '')}" placeholder="${match.team1} 타자" class="w-full min-w-0 bg-black/40 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                                            <div class="flex gap-1">
+                                                <input type="text" id="away-current-batter-${match.id}" value="${escapeHtml(live.awayCurrentBatter || live.awayBatter || '')}" placeholder="${match.team1} 타자" class="flex-1 w-0 min-w-0 bg-black/40 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                                                <select id="away-current-batter-side-${match.id}" title="AWAY 타자 좌우타" class="w-[50px] shrink-0 bg-black/40 text-white text-[9px] rounded border border-white/15 p-1 focus:border-emerald-400 outline-none"><option value="" class="text-black">타석</option><option value="좌타" ${liveBatterSide(live, 'away') === '좌타' ? 'selected' : ''} class="text-black">좌타</option><option value="우타" ${liveBatterSide(live, 'away') === '우타' ? 'selected' : ''} class="text-black">우타</option></select>
+                                            </div>
                                         </label>
                                         <label class="min-w-0">
                                             <span class="block text-[9px] font-bold text-gray-400 mb-1">HOME 현재 타자</span>
-                                            <input type="text" id="home-current-batter-${match.id}" value="${escapeHtml(live.homeCurrentBatter || live.homeBatter || '')}" placeholder="${match.team2} 타자" class="w-full min-w-0 bg-black/40 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                                            <div class="flex gap-1">
+                                                <input type="text" id="home-current-batter-${match.id}" value="${escapeHtml(live.homeCurrentBatter || live.homeBatter || '')}" placeholder="${match.team2} 타자" class="flex-1 w-0 min-w-0 bg-black/40 text-white text-[10px] rounded border border-white/15 p-1.5 focus:border-emerald-400 outline-none">
+                                                <select id="home-current-batter-side-${match.id}" title="HOME 타자 좌우타" class="w-[50px] shrink-0 bg-black/40 text-white text-[9px] rounded border border-white/15 p-1 focus:border-emerald-400 outline-none"><option value="" class="text-black">타석</option><option value="좌타" ${liveBatterSide(live, 'home') === '좌타' ? 'selected' : ''} class="text-black">좌타</option><option value="우타" ${liveBatterSide(live, 'home') === '우타' ? 'selected' : ''} class="text-black">우타</option></select>
+                                            </div>
                                         </label>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -774,6 +788,8 @@ ${textContent}
   "homePitcher": "${team2} 선발투수 이름",
   "awayCurrentBatter": "${team1}의 현재 타자 이름 (공격 중이 아니거나 확인 불가면 빈문자열)",
   "homeCurrentBatter": "${team2}의 현재 타자 이름 (공격 중이 아니거나 확인 불가면 빈문자열)",
+  "awayCurrentBatterSide": "${team1} 현재 타자의 좌타 또는 우타 (확인 불가면 빈문자열)",
+  "homeCurrentBatterSide": "${team2} 현재 타자의 좌타 또는 우타 (확인 불가면 빈문자열)",
   "awayLineup": "${team1} 선발타자 1번~9번 이름 (쉼표로 구분)",
   "homeLineup": "${team2} 선발타자 1번~9번 이름 (쉼표로 구분)",
   "ball": 현재 볼 카운트 (숫자),
@@ -871,6 +887,8 @@ ${textContent}
                     if (data.homePitcher) document.getElementById(`home-pitcher-${matchId}`).value = data.homePitcher;
                     if (data.awayCurrentBatter !== undefined) document.getElementById(`away-current-batter-${matchId}`).value = data.awayCurrentBatter;
                     if (data.homeCurrentBatter !== undefined) document.getElementById(`home-current-batter-${matchId}`).value = data.homeCurrentBatter;
+                    if (data.awayCurrentBatterSide !== undefined) document.getElementById(`away-current-batter-side-${matchId}`).value = data.awayCurrentBatterSide;
+                    if (data.homeCurrentBatterSide !== undefined) document.getElementById(`home-current-batter-side-${matchId}`).value = data.homeCurrentBatterSide;
                     if (data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
                     if (data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
                     
@@ -1075,6 +1093,8 @@ ${textContent}
                     const homeLineupStr = document.getElementById(`home-lineup-${matchId}`).value;
                     const awayCurrentBatter = document.getElementById(`away-current-batter-${matchId}`)?.value.trim() || '';
                     const homeCurrentBatter = document.getElementById(`home-current-batter-${matchId}`)?.value.trim() || '';
+                    const awayCurrentBatterSide = document.getElementById(`away-current-batter-side-${matchId}`)?.value || '';
+                    const homeCurrentBatterSide = document.getElementById(`home-current-batter-side-${matchId}`)?.value || '';
                     const awaySubstitutions = collectSubstitutions(matchId, 'away');
                     const homeSubstitutions = collectSubstitutions(matchId, 'home');
                     const broadcaster = document.getElementById(`broadcaster-${matchId}`) ? document.getElementById(`broadcaster-${matchId}`).value.trim() : ''; 
@@ -1148,6 +1168,8 @@ ${textContent}
                         homeLineup: homeLineup,
                         awayCurrentBatter: awayCurrentBatter,
                         homeCurrentBatter: homeCurrentBatter,
+                        awayCurrentBatterSide: awayCurrentBatterSide,
+                        homeCurrentBatterSide: homeCurrentBatterSide,
                         awaySubstitutions: awaySubstitutions,
                         homeSubstitutions: homeSubstitutions,
                         awayInning: awayInning,
