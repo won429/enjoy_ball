@@ -132,6 +132,11 @@
             })[char]);
         }
 
+        function liveRunnerName(live, base) {
+            const raw = live[`base${base}Runner`] || live[`base${base}RunnerName`] || live[`runner${base}`] || '';
+            return raw && typeof raw === 'object' ? (raw.name || raw.playerName || '') : raw;
+        }
+
         function normalizeSubstitution(raw) {
             if (!raw || typeof raw !== 'object') return {};
             return {
@@ -524,6 +529,13 @@
                                             <label class="flex items-center gap-0.5 text-[10px] text-gray-300 whitespace-nowrap"><input type="checkbox" id="base3-${match.id}" ${live.base3 ? 'checked' : ''} class="accent-point shrink-0"> 3루</label>
                                         </div>
                                     </div>
+
+                                    <div class="flex items-center gap-1.5 mt-0.5">
+                                        <span class="text-[10px] font-bold text-gray-400 w-[38px] shrink-0 text-center">주자명</span>
+                                        <input type="text" id="base1-runner-${match.id}" value="${escapeHtml(liveRunnerName(live, 1))}" oninput="if(this.value.trim()) document.getElementById('base1-${match.id}').checked=true" placeholder="1루" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[10px] rounded border border-white/10 p-1.5 focus:border-point outline-none text-center">
+                                        <input type="text" id="base2-runner-${match.id}" value="${escapeHtml(liveRunnerName(live, 2))}" oninput="if(this.value.trim()) document.getElementById('base2-${match.id}').checked=true" placeholder="2루" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[10px] rounded border border-white/10 p-1.5 focus:border-point outline-none text-center">
+                                        <input type="text" id="base3-runner-${match.id}" value="${escapeHtml(liveRunnerName(live, 3))}" oninput="if(this.value.trim()) document.getElementById('base3-${match.id}').checked=true" placeholder="3루" class="flex-1 w-0 min-w-0 bg-black/50 text-white text-[10px] rounded border border-white/10 p-1.5 focus:border-point outline-none text-center">
+                                    </div>
                                     
                                     <!-- 투구수 -->
                                     <div class="flex items-center gap-1.5 mt-0.5">
@@ -770,6 +782,9 @@ ${textContent}
   "base1": 1루 주자 여부 (true/false),
   "base2": 2루 주자 여부 (true/false),
   "base3": 3루 주자 여부 (true/false),
+  "base1Runner": "1루 주자 이름 (없거나 확인 불가면 빈문자열)",
+  "base2Runner": "2루 주자 이름 (없거나 확인 불가면 빈문자열)",
+  "base3Runner": "3루 주자 이름 (없거나 확인 불가면 빈문자열)",
   "awayPitcherCount": 원정 투수 투구수 (숫자),
   "homePitcherCount": 홈 투수 투구수 (숫자),
   "awayInning": ["0", "0", "1", "-", "-", "-", "-", "-", "-"],
@@ -865,6 +880,9 @@ ${textContent}
                     if (data.base1 !== undefined) document.getElementById(`base1-${matchId}`).checked = data.base1;
                     if (data.base2 !== undefined) document.getElementById(`base2-${matchId}`).checked = data.base2;
                     if (data.base3 !== undefined) document.getElementById(`base3-${matchId}`).checked = data.base3;
+                    if (data.base1Runner !== undefined) { document.getElementById(`base1-runner-${matchId}`).value = data.base1Runner; if (data.base1Runner) document.getElementById(`base1-${matchId}`).checked = true; }
+                    if (data.base2Runner !== undefined) { document.getElementById(`base2-runner-${matchId}`).value = data.base2Runner; if (data.base2Runner) document.getElementById(`base2-${matchId}`).checked = true; }
+                    if (data.base3Runner !== undefined) { document.getElementById(`base3-runner-${matchId}`).value = data.base3Runner; if (data.base3Runner) document.getElementById(`base3-${matchId}`).checked = true; }
                     if (data.awayPitcherCount !== undefined) document.getElementById(`away-pcount-${matchId}`).value = data.awayPitcherCount;
                     if (data.homePitcherCount !== undefined) document.getElementById(`home-pcount-${matchId}`).value = data.homePitcherCount;
                     if (data.awayInning !== undefined && Array.isArray(data.awayInning)) document.getElementById(`away-inning-${matchId}`).value = data.awayInning.join(',');
@@ -1075,6 +1093,9 @@ ${textContent}
                     const base1 = document.getElementById(`base1-${matchId}`) ? document.getElementById(`base1-${matchId}`).checked : false;
                     const base2 = document.getElementById(`base2-${matchId}`) ? document.getElementById(`base2-${matchId}`).checked : false;
                     const base3 = document.getElementById(`base3-${matchId}`) ? document.getElementById(`base3-${matchId}`).checked : false;
+                    const base1Runner = base1 ? (document.getElementById(`base1-runner-${matchId}`)?.value.trim() || '') : '';
+                    const base2Runner = base2 ? (document.getElementById(`base2-runner-${matchId}`)?.value.trim() || '') : '';
+                    const base3Runner = base3 ? (document.getElementById(`base3-runner-${matchId}`)?.value.trim() || '') : '';
                     
                     const awayPitcherCount = document.getElementById(`away-pcount-${matchId}`) ? parseInt(document.getElementById(`away-pcount-${matchId}`).value) || 0 : 0;
                     const homePitcherCount = document.getElementById(`home-pcount-${matchId}`) ? parseInt(document.getElementById(`home-pcount-${matchId}`).value) || 0 : 0;
@@ -1143,6 +1164,9 @@ ${textContent}
                         base1: base1,
                         base2: base2,
                         base3: base3,
+                        base1Runner: base1Runner,
+                        base2Runner: base2Runner,
+                        base3Runner: base3Runner,
                         winPitcher: winPitcher,
                         losePitcher: losePitcher,
                         broadcaster: broadcaster,
