@@ -211,6 +211,98 @@
             }).filter(item => item.inName);
         }
 
+        const DEFENSE_POSITIONS = ['포수', '1루수', '2루수', '3루수', '유격수', '좌익수', '중견수', '우익수', '지명타자', '투수'];
+
+        function lineupPlayerName(raw) {
+            if (raw && typeof raw === 'object') return raw.name || raw.playerName || '';
+            return String(raw || '').trim();
+        }
+
+        function lineupNamesFromRaw(raw) {
+            if (Array.isArray(raw)) return raw.map(lineupPlayerName).filter(Boolean).slice(0, 9);
+            return String(raw || '').split(',').map(name => name.trim()).filter(Boolean).slice(0, 9);
+        }
+
+        function liveLineupNames(live, side) {
+            const basic = lineupNamesFromRaw(live[`${side}Lineup`]);
+            if (basic.length) return basic;
+            return lineupNamesFromRaw(live[`${side}LineupDetail`]);
+        }
+
+        function lineupPositionOf(live, side, index, name) {
+            const detail = Array.isArray(live[`${side}LineupDetail`]) ? live[`${side}LineupDetail`] : [];
+            const basic = Array.isArray(live[`${side}Lineup`]) ? live[`${side}Lineup`] : [];
+            const byName = detail.find(player => lineupPlayerName(player) === name);
+            const player = byName || detail[index] || basic[index] || {};
+            return player && typeof player === 'object' ? (player.position || player.pos || '') : '';
+        }
+
+        function defensePositionOptions(selected = '') {
+            return `<option value="" class="text-black">미정</option>` + DEFENSE_POSITIONS.map(position =>
+                `<option value="${position}" ${selected === position ? 'selected' : ''} class="text-black">${position}</option>`
+            ).join('');
+        }
+
+        function lineupPositionEditorHtml(matchId, side, team, live) {
+            const names = liveLineupNames(live, side);
+            const rows = Array.from({ length: 9 }, (_, index) => {
+                const name = names[index] || '';
+                const position = lineupPositionOf(live, side, index, name);
+                return `<label class="grid grid-cols-[minmax(0,1fr)_74px] items-center gap-1 rounded-md bg-black/25 px-1.5 py-1 border border-white/5">
+                    <span id="${side}-lineup-name-${matchId}-${index}" class="min-w-0 truncate text-[9px] font-bold ${name ? 'text-gray-200' : 'text-gray-600'}">${index + 1}. ${escapeHtml(name || '선수 미입력')}</span>
+                    <select id="${side}-lineup-position-${matchId}-${index}" title="${index + 1}번 타자 수비 위치" class="min-w-0 bg-white/10 text-white text-[9px] rounded border border-white/15 px-1 py-1 focus:border-point outline-none">${defensePositionOptions(position)}</select>
+                </label>`;
+            }).join('');
+            return `<section class="min-w-0 rounded-lg border border-blue-500/20 bg-blue-950/20 p-1.5">
+                <div class="mb-1.5 flex items-center justify-between gap-1">
+                    <span class="truncate text-[10px] font-bold text-blue-300">${escapeHtml(team)} 수비 위치</span>
+                    <span class="shrink-0 text-[8px] text-gray-500">타순 기준</span>
+                </div>
+                <div class="space-y-1">${rows}</div>
+            </section>`;
+        }
+
+        function syncLineupPositionLabels(matchId, side) {
+            const input = document.getElementById(`${side}-lineup-${matchId}`);
+            const names = lineupNamesFromRaw(input?.value || '');
+            for (let index = 0; index < 9; index++) {
+                const label = document.getElementById(`${side}-lineup-name-${matchId}-${index}`);
+                if (!label) continue;
+                const name = names[index] || '';
+                label.textContent = `${index + 1}. ${name || '선수 미입력'}`;
+                label.classList.toggle('text-gray-200', Boolean(name));
+                label.classList.toggle('text-gray-600', !name);
+            }
+        }
+
+        function applyLineupToForm(matchId, side, rawLineup, rawDetail = null) {
+            const input = document.getElementById(`${side}-lineup-${matchId}`);
+            if (!input) return;
+            const names = lineupNamesFromRaw(rawLineup);
+            input.value = names.join(', ');
+            const detail = Array.isArray(rawDetail) ? rawDetail : (Array.isArray(rawLineup) ? rawLineup : []);
+            names.forEach((name, index) => {
+                const player = detail.find(item => lineupPlayerName(item) === name) || detail[index] || {};
+                const select = document.getElementById(`${side}-lineup-position-${matchId}-${index}`);
+                if (select && player && typeof player === 'object') select.value = player.position || player.pos || '';
+            });
+            syncLineupPositionLabels(matchId, side);
+        }
+
+        function collectLineupDetail(matchId, side, names, existingDetail = []) {
+            const oldPlayers = Array.isArray(existingDetail) ? existingDetail : [];
+            return names.map((name, index) => {
+                const oldPlayer = oldPlayers.find(player => lineupPlayerName(player) === name) || oldPlayers[index] || {};
+                const select = document.getElementById(`${side}-lineup-position-${matchId}-${index}`);
+                return {
+                    ...(oldPlayer && typeof oldPlayer === 'object' ? oldPlayer : {}),
+                    name,
+                    position: select?.value || '',
+                    battingOrder: index + 1
+                };
+            });
+        }
+
         // 🔥 로그인 상태 감지 리스너 🔥
         auth.onAuthStateChanged(user => {
             if (user) {
@@ -421,6 +513,8 @@
                     let live = liveDataStore[match.id] || { gameStatus: '경기전', awayScore: 0, homeScore: 0 };
                     const awaySubstitutions = live.awaySubstitutions || live.awayChanges || live.awayReplacements || [];
                     const homeSubstitutions = live.homeSubstitutions || live.homeChanges || live.homeReplacements || [];
+                    const awayLineupNames = liveLineupNames(live, 'away');
+                    const homeLineupNames = liveLineupNames(live, 'home');
                     
                     let inningOptionsHtml = `<option value="" class="text-black">-</option>`;
                     for (let i = 1; i <= 15; i++) {
@@ -477,12 +571,24 @@
                                 <div class="flex flex-col gap-1.5 mt-1 border-t border-white/5 pt-2">
                                     <div class="flex items-center gap-2">
                                         <span class="text-[10px] font-bold text-gray-400 w-[42px] shrink-0 text-center leading-tight">AWAY<br>타자</span>
-                                        <input type="text" id="away-lineup-${match.id}" value="${(live.awayLineup || []).join(', ')}" placeholder="${match.team1} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
+                                        <input type="text" id="away-lineup-${match.id}" value="${escapeHtml(awayLineupNames.join(', '))}" oninput="syncLineupPositionLabels(${match.id}, 'away')" placeholder="${match.team1} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span class="text-[10px] font-bold text-gray-400 w-[42px] shrink-0 text-center leading-tight">HOME<br>타자</span>
-                                        <input type="text" id="home-lineup-${match.id}" value="${(live.homeLineup || []).join(', ')}" placeholder="${match.team2} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
+                                        <input type="text" id="home-lineup-${match.id}" value="${escapeHtml(homeLineupNames.join(', '))}" oninput="syncLineupPositionLabels(${match.id}, 'home')" placeholder="${match.team2} 선발 라인업 (쉼표 구분)" class="flex-1 bg-white/10 text-white text-[11px] rounded border border-white/20 p-1.5 focus:border-point outline-none">
                                     </div>
+                                </div>
+
+                                <div class="mt-2 rounded-xl border border-blue-500/20 bg-blue-950/10 p-2">
+                                    <div class="mb-2 flex items-center justify-between gap-2">
+                                        <div class="text-[11px] font-bold text-blue-300"><i class="fa-solid fa-shield-halved mr-1"></i>선발 수비 위치</div>
+                                        <span class="text-[8px] text-gray-500">중계 수비 배치에 사용</span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-1.5">
+                                        ${lineupPositionEditorHtml(match.id, 'away', match.team1, live)}
+                                        ${lineupPositionEditorHtml(match.id, 'home', match.team2, live)}
+                                    </div>
+                                    <p class="mt-1.5 text-[8px] leading-relaxed text-gray-500">위 라인업의 1~9번 타순과 같은 번호에 포지션을 선택하세요. 투수는 기존 투수 입력란의 선수가 자동으로 표시됩니다.</p>
                                 </div>
 
                                 <div class="flex flex-col gap-2 mt-2 pt-2.5 border-t border-white/5 rounded-xl bg-emerald-950/20 p-2 border border-emerald-500/20">
@@ -889,8 +995,8 @@ ${textContent}
                     if (data.homeCurrentBatter !== undefined) document.getElementById(`home-current-batter-${matchId}`).value = data.homeCurrentBatter;
                     if (data.awayCurrentBatterSide !== undefined) document.getElementById(`away-current-batter-side-${matchId}`).value = data.awayCurrentBatterSide;
                     if (data.homeCurrentBatterSide !== undefined) document.getElementById(`home-current-batter-side-${matchId}`).value = data.homeCurrentBatterSide;
-                    if (data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
-                    if (data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
+                    if (data.awayLineup || data.awayLineupDetail) applyLineupToForm(matchId, 'away', data.awayLineup || data.awayLineupDetail, data.awayLineupDetail);
+                    if (data.homeLineup || data.homeLineupDetail) applyLineupToForm(matchId, 'home', data.homeLineup || data.homeLineupDetail, data.homeLineupDetail);
                     
                     if (data.ball !== undefined) document.getElementById(`ball-${matchId}`).value = data.ball;
                     if (data.strike !== undefined) document.getElementById(`strike-${matchId}`).value = data.strike;
@@ -1035,8 +1141,8 @@ ${textContent}
                         
                         if(data.awayPitcher) document.getElementById(`away-pitcher-${matchId}`).value = data.awayPitcher;
                         if(data.homePitcher) document.getElementById(`home-pitcher-${matchId}`).value = data.homePitcher;
-                        if(data.awayLineup) document.getElementById(`away-lineup-${matchId}`).value = data.awayLineup;
-                        if(data.homeLineup) document.getElementById(`home-lineup-${matchId}`).value = data.homeLineup;
+                        if(data.awayLineup || data.awayLineupDetail) applyLineupToForm(matchId, 'away', data.awayLineup || data.awayLineupDetail, data.awayLineupDetail);
+                        if(data.homeLineup || data.homeLineupDetail) applyLineupToForm(matchId, 'home', data.homeLineup || data.homeLineupDetail, data.homeLineupDetail);
                         
                         showToast('AI 스캔 완료! 라인업이 자동 입력되었습니다.');
                     } else {
@@ -1142,6 +1248,8 @@ ${textContent}
                     }
 
                     let liveData = liveDataStore[matchId] || {};
+                    const awayLineupDetail = collectLineupDetail(matchId, 'away', awayLineup, liveData.awayLineupDetail);
+                    const homeLineupDetail = collectLineupDetail(matchId, 'home', homeLineup, liveData.homeLineupDetail);
                     let endTime = liveData.endTime || 0;
                     if (status === '종료' && !endTime) endTime = Date.now();
                     else if (status !== '종료') endTime = 0;
@@ -1166,6 +1274,8 @@ ${textContent}
                         homePitcherCount: homePitcherCount,
                         awayLineup: awayLineup,
                         homeLineup: homeLineup,
+                        awayLineupDetail: awayLineupDetail,
+                        homeLineupDetail: homeLineupDetail,
                         awayCurrentBatter: awayCurrentBatter,
                         homeCurrentBatter: homeCurrentBatter,
                         awayCurrentBatterSide: awayCurrentBatterSide,
