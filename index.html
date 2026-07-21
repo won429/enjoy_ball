@@ -343,12 +343,14 @@
             const summary = Array.isArray(summaryRaw) ? summaryRaw.join('\n') : String(summaryRaw);
             const teamSide = String(adminPitchValue(batter, ['teamSide', 'side', '공격팀']) || 'home').toLowerCase();
             const batterSide = String(adminPitchValue(batter, ['batterSide', 'bats', '타석']) || '우타');
+            const inning = Math.max(1, Math.min(11, parseInt(adminPitchValue(batter, ['inning', 'inningNumber', '회'])) || 1));
             return `<div class="record-batter-row rounded-xl border border-cyan-500/20 bg-black/30 p-2.5" data-record-batter>
                 <div class="mb-2 flex items-center justify-between gap-2"><span class="text-[10px] font-bold text-cyan-300"><i class="fa-solid fa-chart-column mr-1"></i><span data-record-label>${index + 1}번째 타자 기록</span></span><button type="button" onclick="removeRecordBatterRow(this)" class="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-[9px] font-bold text-red-300"><i class="fa-solid fa-trash-can mr-0.5"></i>삭제</button></div>
                 <div class="grid grid-cols-4 gap-1.5">
                     <label class="col-span-2"><span class="mb-1 block text-[8px] font-bold text-gray-500">선수명</span><input data-record-field="name" value="${value(['name','playerName','batterName','선수명'])}" placeholder="강승호" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[10px] text-white outline-none focus:border-cyan-400"></label>
                     <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타순</span><input data-record-field="battingOrder" type="number" min="1" max="9" value="${value(['battingOrder','order','타순'], index + 1)}" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none focus:border-cyan-400"></label>
                     <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타율</span><input data-record-field="average" value="${value(['average','battingAverage','avg','타율'])}" placeholder="0.261" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none focus:border-cyan-400"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">기록 이닝</span><select data-record-field="inning" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[9px] text-white outline-none">${Array.from({length:11}, (_, i) => `<option value="${i + 1}" ${inning === i + 1 ? 'selected' : ''} class="text-black">${i + 1}회</option>`).join('')}</select></label>
                     <label><span class="mb-1 block text-[8px] font-bold text-gray-500">공격팀</span><select data-record-field="teamSide" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[9px] text-white outline-none"><option value="away" ${teamSide === 'away' || teamSide.includes('원정') ? 'selected' : ''} class="text-black">원정</option><option value="home" ${teamSide === 'home' || teamSide.includes('홈') ? 'selected' : ''} class="text-black">홈</option></select></label>
                     <label><span class="mb-1 block text-[8px] font-bold text-gray-500">좌·우타</span><select data-record-field="batterSide" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[9px] text-white outline-none"><option value="우타" ${batterSide.includes('우') ? 'selected' : ''} class="text-black">우타</option><option value="좌타" ${batterSide.includes('좌') ? 'selected' : ''} class="text-black">좌타</option></select></label>
                     <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타석</span><input data-record-field="plateAppearances" type="number" min="0" value="${value(['plateAppearances','pa','타석'],0)}" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none"></label>
@@ -356,11 +358,6 @@
                 </div>
                 <div class="mt-1.5 grid grid-cols-4 gap-1">
                     ${[['hits','안타',['hits','h','안타']],['runs','득점',['runs','r','득점']],['rbi','타점',['rbi','타점']],['homeRuns','홈런',['homeRuns','hr','홈런']],['walks','볼넷',['walks','bb','볼넷']],['strikeouts','삼진',['strikeouts','so','삼진']],['hbp','사구',['hbp','hitByPitch','사구']],['stolenBases','도루',['stolenBases','sb','도루']]].map(([field,label,keys]) => `<label><span class="mb-1 block text-center text-[7px] text-gray-600">${label}</span><input data-record-field="${field}" type="number" min="0" value="${value(keys,0)}" class="w-full rounded border border-white/10 bg-black/50 p-1 text-center text-[9px] text-white outline-none"></label>`).join('')}
-                </div>
-                <div class="mt-2 grid grid-cols-3 gap-1.5">
-                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">승리확률 팀</span><input data-record-field="winProbabilityTeam" value="${value(['winProbabilityTeam','probabilityTeam','승리확률팀'])}" placeholder="두산" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[9px] text-white outline-none"></label>
-                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">승리확률 %</span><input data-record-field="winProbability" type="number" step="0.1" value="${value(['winProbability','probability','승리확률'])}" placeholder="47.8" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[9px] text-white outline-none"></label>
-                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">변화 %p</span><input data-record-field="winProbabilityChange" type="number" step="0.1" value="${value(['winProbabilityChange','probabilityChange','승리확률변화'])}" placeholder="9.3" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[9px] text-white outline-none"></label>
                 </div>
                 <label class="mt-2 block"><span class="mb-1 block text-[8px] font-bold text-gray-500">주요 상황 설명 <span class="font-normal text-gray-600">(줄바꿈 가능)</span></span><textarea data-record-field="summary" rows="2" placeholder="1루주자 정수빈 : 2루까지 진루&#10;강승호 : 좌익수 앞 1루타" class="w-full resize-y rounded border border-white/10 bg-black/50 p-2 text-[9px] leading-relaxed text-white outline-none focus:border-cyan-400">${escapeHtml(summary)}</textarea></label>
                 <label class="mt-2 block"><span class="mb-1 block text-[8px] font-bold text-gray-500">경기 이벤트 <span class="font-normal text-gray-600">(한 줄에 하나)</span></span><textarea data-record-field="events" rows="2" placeholder="코칭스태프 마운드 방문&#10;투수 투수판 이탈" class="w-full resize-y rounded border border-white/10 bg-black/50 p-2 text-[9px] leading-relaxed text-white outline-none focus:border-cyan-400">${escapeHtml(events)}</textarea></label>
@@ -412,15 +409,13 @@
                 return {
                     name: get('name') || `타자 ${index + 1}`,
                     battingOrder: Math.max(1, parseInt(get('battingOrder')) || index + 1),
+                    inning: Math.max(1, Math.min(11, parseInt(get('inning')) || 1)),
                     average: get('average'),
                     teamSide: get('teamSide') || 'home',
                     batterSide: get('batterSide') || '우타',
                     plateAppearances: number('plateAppearances'), atBats: number('atBats'), hits: number('hits'), runs: number('runs'),
                     rbi: number('rbi'), homeRuns: number('homeRuns'), walks: number('walks'), strikeouts: number('strikeouts'),
                     hbp: number('hbp'), stolenBases: number('stolenBases'),
-                    winProbabilityTeam: get('winProbabilityTeam'),
-                    winProbability: get('winProbability'),
-                    winProbabilityChange: get('winProbabilityChange'),
                     summary: get('summary'),
                     events: get('events').split('\n').map(item => item.trim()).filter(Boolean),
                     pitches: parseRecordPitchLines(get('pitches'))
