@@ -310,6 +310,124 @@
             });
         }
 
+        function adminRecordBatters(live) {
+            const raw = live.recordBatters || live.batterRecords || live.hitterRecords || live.타자기록 || [];
+            return Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+        }
+
+        function recordPitchLines(batter) {
+            const raw = batter.pitches || batter.pitchHistory || batter.atBatPitches || [];
+            const pitches = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+            return pitches.map((pitch, index) => {
+                const source = pitch && typeof pitch === 'object' ? pitch : {};
+                return [
+                    adminPitchValue(source, ['pitchNumber', 'number', 'no']) || index + 1,
+                    adminPitchValue(source, ['pitchResult', 'result', 'call', '판정']) || '',
+                    adminPitchValue(source, ['pitchSpeed', 'velocity', 'speed', '구속']) || '',
+                    adminPitchValue(source, ['pitchType', 'ballType', 'pitchName', 'type', '구종']) || '',
+                    adminPitchValue(source, ['count', 'ballStrikeCount', 'pitchCount', '카운트']) || '',
+                    adminPitchValue(source, ['xPercent', 'pitchX', 'x']) ?? 50,
+                    adminPitchValue(source, ['yPercent', 'pitchY', 'y']) ?? 50
+                ].join('|');
+            }).join('\n');
+        }
+
+        function recordBatterRowHtml(matchId, raw = {}, index = 0) {
+            const batter = raw && typeof raw === 'object' ? raw : {};
+            const value = (keys, fallback = '') => escapeHtml(adminPitchValue(batter, keys) ?? fallback);
+            const eventsRaw = adminPitchValue(batter, ['events', 'playEvents', 'eventLog', '상황기록']) || [];
+            const events = Array.isArray(eventsRaw)
+                ? eventsRaw.map(event => typeof event === 'object' ? (event.text || event.description || event.event || '') : event).filter(Boolean).join('\n')
+                : String(eventsRaw);
+            const summaryRaw = adminPitchValue(batter, ['summary', 'playSummary', 'description', '상황설명']) || '';
+            const summary = Array.isArray(summaryRaw) ? summaryRaw.join('\n') : String(summaryRaw);
+            const teamSide = String(adminPitchValue(batter, ['teamSide', 'side', '공격팀']) || 'home').toLowerCase();
+            const batterSide = String(adminPitchValue(batter, ['batterSide', 'bats', '타석']) || '우타');
+            return `<div class="record-batter-row rounded-xl border border-cyan-500/20 bg-black/30 p-2.5" data-record-batter>
+                <div class="mb-2 flex items-center justify-between gap-2"><span class="text-[10px] font-bold text-cyan-300"><i class="fa-solid fa-chart-column mr-1"></i><span data-record-label>${index + 1}번째 타자 기록</span></span><button type="button" onclick="removeRecordBatterRow(this)" class="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-[9px] font-bold text-red-300"><i class="fa-solid fa-trash-can mr-0.5"></i>삭제</button></div>
+                <div class="grid grid-cols-4 gap-1.5">
+                    <label class="col-span-2"><span class="mb-1 block text-[8px] font-bold text-gray-500">선수명</span><input data-record-field="name" value="${value(['name','playerName','batterName','선수명'])}" placeholder="강승호" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[10px] text-white outline-none focus:border-cyan-400"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타순</span><input data-record-field="battingOrder" type="number" min="1" max="9" value="${value(['battingOrder','order','타순'], index + 1)}" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none focus:border-cyan-400"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타율</span><input data-record-field="average" value="${value(['average','battingAverage','avg','타율'])}" placeholder="0.261" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none focus:border-cyan-400"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">공격팀</span><select data-record-field="teamSide" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[9px] text-white outline-none"><option value="away" ${teamSide === 'away' || teamSide.includes('원정') ? 'selected' : ''} class="text-black">원정</option><option value="home" ${teamSide === 'home' || teamSide.includes('홈') ? 'selected' : ''} class="text-black">홈</option></select></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">좌·우타</span><select data-record-field="batterSide" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[9px] text-white outline-none"><option value="우타" ${batterSide.includes('우') ? 'selected' : ''} class="text-black">우타</option><option value="좌타" ${batterSide.includes('좌') ? 'selected' : ''} class="text-black">좌타</option></select></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타석</span><input data-record-field="plateAppearances" type="number" min="0" value="${value(['plateAppearances','pa','타석'],0)}" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">타수</span><input data-record-field="atBats" type="number" min="0" value="${value(['atBats','ab','타수'],0)}" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[10px] text-white outline-none"></label>
+                </div>
+                <div class="mt-1.5 grid grid-cols-4 gap-1">
+                    ${[['hits','안타',['hits','h','안타']],['runs','득점',['runs','r','득점']],['rbi','타점',['rbi','타점']],['homeRuns','홈런',['homeRuns','hr','홈런']],['walks','볼넷',['walks','bb','볼넷']],['strikeouts','삼진',['strikeouts','so','삼진']],['hbp','사구',['hbp','hitByPitch','사구']],['stolenBases','도루',['stolenBases','sb','도루']]].map(([field,label,keys]) => `<label><span class="mb-1 block text-center text-[7px] text-gray-600">${label}</span><input data-record-field="${field}" type="number" min="0" value="${value(keys,0)}" class="w-full rounded border border-white/10 bg-black/50 p-1 text-center text-[9px] text-white outline-none"></label>`).join('')}
+                </div>
+                <div class="mt-2 grid grid-cols-3 gap-1.5">
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">승리확률 팀</span><input data-record-field="winProbabilityTeam" value="${value(['winProbabilityTeam','probabilityTeam','승리확률팀'])}" placeholder="두산" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-[9px] text-white outline-none"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">승리확률 %</span><input data-record-field="winProbability" type="number" step="0.1" value="${value(['winProbability','probability','승리확률'])}" placeholder="47.8" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[9px] text-white outline-none"></label>
+                    <label><span class="mb-1 block text-[8px] font-bold text-gray-500">변화 %p</span><input data-record-field="winProbabilityChange" type="number" step="0.1" value="${value(['winProbabilityChange','probabilityChange','승리확률변화'])}" placeholder="9.3" class="w-full rounded border border-white/10 bg-black/50 p-1.5 text-center text-[9px] text-white outline-none"></label>
+                </div>
+                <label class="mt-2 block"><span class="mb-1 block text-[8px] font-bold text-gray-500">주요 상황 설명 <span class="font-normal text-gray-600">(줄바꿈 가능)</span></span><textarea data-record-field="summary" rows="2" placeholder="1루주자 정수빈 : 2루까지 진루&#10;강승호 : 좌익수 앞 1루타" class="w-full resize-y rounded border border-white/10 bg-black/50 p-2 text-[9px] leading-relaxed text-white outline-none focus:border-cyan-400">${escapeHtml(summary)}</textarea></label>
+                <label class="mt-2 block"><span class="mb-1 block text-[8px] font-bold text-gray-500">경기 이벤트 <span class="font-normal text-gray-600">(한 줄에 하나)</span></span><textarea data-record-field="events" rows="2" placeholder="코칭스태프 마운드 방문&#10;투수 투수판 이탈" class="w-full resize-y rounded border border-white/10 bg-black/50 p-2 text-[9px] leading-relaxed text-white outline-none focus:border-cyan-400">${escapeHtml(events)}</textarea></label>
+                <label class="mt-2 block"><span class="mb-1 block text-[8px] font-bold text-gray-500">투구 기록 <span class="font-normal text-gray-600">번호|판정|구속|구종|카운트|X|Y</span></span><textarea data-record-field="pitches" rows="4" placeholder="1|볼|146|직구|1-0|30|70&#10;2|볼|148|직구|2-0|60|40&#10;3|타격|148|직구||52|36" class="w-full resize-y rounded border border-white/10 bg-black/50 p-2 font-mono text-[9px] leading-relaxed text-white outline-none focus:border-cyan-400">${escapeHtml(recordPitchLines(batter))}</textarea></label>
+            </div>`;
+        }
+
+        function addRecordBatterRow(matchId) {
+            const list = document.getElementById(`record-batter-list-${matchId}`);
+            if (!list) return;
+            const index = list.querySelectorAll('[data-record-batter]').length;
+            list.insertAdjacentHTML('beforeend', recordBatterRowHtml(matchId, { battingOrder:index + 1 }, index));
+            list.querySelector('[data-empty-records]')?.remove();
+        }
+
+        function removeRecordBatterRow(button) {
+            const row = button.closest('[data-record-batter]');
+            const list = row?.parentElement;
+            row?.remove();
+            if (!list) return;
+            list.querySelectorAll('[data-record-batter]').forEach((item, index) => {
+                const label = item.querySelector('[data-record-label]');
+                if (label) label.textContent = `${index + 1}번째 타자 기록`;
+            });
+            if (!list.querySelector('[data-record-batter]')) list.innerHTML = '<p data-empty-records class="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[9px] text-gray-600">입력된 타자 기록이 없습니다.</p>';
+        }
+
+        function parseRecordPitchLines(value) {
+            return String(value || '').split('\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
+                const [number, result, speed, type, count, x, y] = line.split('|').map(item => item.trim());
+                return {
+                    pitchNumber: Math.max(1, parseInt(number) || index + 1),
+                    pitchResult: result || '',
+                    pitchSpeed: Math.max(0, Number(speed) || 0),
+                    pitchType: type || '투구',
+                    count: count || '',
+                    xPercent: Math.max(0, Math.min(100, Number(x) || 50)),
+                    yPercent: Math.max(0, Math.min(100, Number(y) || 50))
+                };
+            });
+        }
+
+        function collectRecordBatters(matchId) {
+            const list = document.getElementById(`record-batter-list-${matchId}`);
+            if (!list) return [];
+            return Array.from(list.querySelectorAll('[data-record-batter]')).map((row, index) => {
+                const get = field => row.querySelector(`[data-record-field="${field}"]`)?.value.trim() || '';
+                const number = field => Math.max(0, parseInt(get(field)) || 0);
+                return {
+                    name: get('name') || `타자 ${index + 1}`,
+                    battingOrder: Math.max(1, parseInt(get('battingOrder')) || index + 1),
+                    average: get('average'),
+                    teamSide: get('teamSide') || 'home',
+                    batterSide: get('batterSide') || '우타',
+                    plateAppearances: number('plateAppearances'), atBats: number('atBats'), hits: number('hits'), runs: number('runs'),
+                    rbi: number('rbi'), homeRuns: number('homeRuns'), walks: number('walks'), strikeouts: number('strikeouts'),
+                    hbp: number('hbp'), stolenBases: number('stolenBases'),
+                    winProbabilityTeam: get('winProbabilityTeam'),
+                    winProbability: get('winProbability'),
+                    winProbabilityChange: get('winProbabilityChange'),
+                    summary: get('summary'),
+                    events: get('events').split('\n').map(item => item.trim()).filter(Boolean),
+                    pitches: parseRecordPitchLines(get('pitches'))
+                };
+            });
+        }
+
         function normalizeSubstitution(raw) {
             if (!raw || typeof raw !== 'object') return {};
             return {
@@ -684,6 +802,10 @@
                     const atBatPitchRows = atBatPitches.length
                         ? atBatPitches.map((pitch, index) => atBatPitchRowHtml(match.id, pitch, index)).join('')
                         : '<p data-empty-pitches class="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[9px] text-gray-600">등록된 투구가 없습니다. 투구 추가를 눌러 시작하세요.</p>';
+                    const recordBatters = adminRecordBatters(live);
+                    const recordBatterRows = recordBatters.length
+                        ? recordBatters.map((batter, index) => recordBatterRowHtml(match.id, batter, index)).join('')
+                        : '<p data-empty-records class="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[9px] text-gray-600">입력된 타자 기록이 없습니다.</p>';
                     
                     let inningOptionsHtml = `<option value="" class="text-black">-</option>`;
                     for (let i = 1; i <= 15; i++) {
@@ -813,6 +935,15 @@
                                     </div>
                                     <div id="atbat-pitch-list-${match.id}" class="space-y-2">${atBatPitchRows}</div>
                                     <p class="mt-2 text-[8px] leading-relaxed text-gray-600">새 타자가 들어오면 초기화 후 새 투구를 입력하세요. 궤적 세부 좌표를 비우면 메인 화면에서 자연스러운 곡선을 자동 생성합니다.</p>
+                                </section>
+
+                                <section class="mt-2 rounded-xl border border-cyan-500/25 bg-cyan-950/15 p-2.5">
+                                    <div class="mb-2 flex items-start justify-between gap-2">
+                                        <div><div class="text-[11px] font-bold text-cyan-300"><i class="fa-solid fa-chart-column mr-1"></i>기록 탭 타자 기록</div><p class="mt-0.5 text-[8px] leading-relaxed text-gray-500">타자 성적·상황·승리확률·이벤트·투구 위치를 메인 기록 탭에 표시합니다.</p></div>
+                                        <button type="button" onclick="addRecordBatterRow(${match.id})" class="shrink-0 rounded-lg border border-cyan-400/30 bg-cyan-500/20 px-2 py-1.5 text-[9px] font-bold text-cyan-200 hover:bg-cyan-500/30"><i class="fa-solid fa-plus mr-0.5"></i>타자 추가</button>
+                                    </div>
+                                    <div id="record-batter-list-${match.id}" class="space-y-2">${recordBatterRows}</div>
+                                    <p class="mt-2 text-[8px] leading-relaxed text-gray-600">투구 기록의 X·Y는 0~100입니다. 입력한 투구는 메인의 ‘투구 위치보기’ 팝업에도 사용됩니다.</p>
                                 </section>
 
                                 <!-- 🔥 스코어보드 & 실시간 상황 관리 영역 추가 🔥 -->
@@ -1427,6 +1558,7 @@ ${textContent}
                     const losePitcher = document.getElementById(`lose-pitcher-${matchId}`) ? document.getElementById(`lose-pitcher-${matchId}`).value.trim() : '';
                     const currentAtBatPitches = collectAtBatPitches(matchId);
                     const latestAtBatPitch = currentAtBatPitches.length ? currentAtBatPitches[currentAtBatPitches.length - 1] : null;
+                    const recordBatters = collectRecordBatters(matchId);
 
                     if (match.time !== newTime) {
                         match.time = newTime;
@@ -1478,6 +1610,7 @@ ${textContent}
                         latestPitch: latestAtBatPitch,
                         currentPitch: latestAtBatPitch,
                         lastPitch: latestAtBatPitch,
+                        recordBatters: recordBatters,
                         awayInning: awayInning,
                         homeInning: homeInning,
                         awayHit: awayHit,
