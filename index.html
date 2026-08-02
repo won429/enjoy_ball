@@ -132,6 +132,20 @@
             })[char]);
         }
 
+        function normalizeAdminGameStatus(status) {
+            const value = String(status || '').trim();
+            const compact = value.replace(/\s+/g, '');
+            if (compact === '우취' || compact === '우천취소') return '우천취소';
+            if (compact === '폭염취소') return '폭염 취소';
+            if (compact === '그라운드사정취소') return '그라운드 사정 취소';
+            return value;
+        }
+
+        function isCanceledStatus(status) {
+            const value = normalizeAdminGameStatus(status).replace(/\s+/g, '');
+            return value === '우천취소' || value === '폭염취소' || value === '그라운드사정취소';
+        }
+
         function liveRunnerName(live, base) {
             const raw = live[`base${base}Runner`] || live[`base${base}RunnerName`] || live[`runner${base}`] || '';
             return raw && typeof raw === 'object' ? (raw.name || raw.playerName || '') : raw;
@@ -796,10 +810,12 @@
                                     <option value="경기전" ${live.gameStatus === '경기전' ? 'selected' : ''} class="text-black">경기전</option>
                                     <option value="경기중" ${live.gameStatus === '경기중' ? 'selected' : ''} class="text-black">경기중</option>
                                     <option value="종료" ${live.gameStatus === '종료' ? 'selected' : ''} class="text-black">종료</option>
-                                    <option value="우취" ${live.gameStatus === '우취' ? 'selected' : ''} class="text-black">우취</option>
+                                    <option value="우천취소" ${normalizeAdminGameStatus(live.gameStatus) === '우천취소' ? 'selected' : ''} class="text-black">우천취소</option>
+                                    <option value="폭염 취소" ${normalizeAdminGameStatus(live.gameStatus) === '폭염 취소' ? 'selected' : ''} class="text-black">폭염 취소</option>
+                                    <option value="그라운드 사정 취소" ${normalizeAdminGameStatus(live.gameStatus) === '그라운드 사정 취소' ? 'selected' : ''} class="text-black">그라운드 사정 취소</option>
                                 </select>
-                                <button onclick="document.getElementById('status-${match.id}').value='우취';" class="h-9 bg-sky-900/60 hover:bg-sky-800 text-sky-300 font-bold px-3 rounded-lg text-[11px] shadow-md active:scale-95 transition-all shrink-0 border border-sky-500/30">
-                                    우취 상태로 변경
+                                <button onclick="document.getElementById('status-${match.id}').value='우천취소';" class="h-9 bg-sky-900/60 hover:bg-sky-800 text-sky-300 font-bold px-3 rounded-lg text-[11px] shadow-md active:scale-95 transition-all shrink-0 border border-sky-500/30">
+                                    우천취소로 변경
                                 </button>
                             </div>
                         </div>
@@ -955,7 +971,7 @@ ${textContent}
 반드시 아래 JSON 구조로만 반환해 (마크다운 백틱은 사용 금지, 오직 JSON만 반환).
 아직 정보가 없다면 기본값이나 빈 문자열을 넣어줘.
 {
-  "gameStatus": "경기전, 경기중, 종료, 우취 중 하나",
+  "gameStatus": "경기전, 경기중, 종료, 우천취소, 폭염 취소, 그라운드 사정 취소 중 하나",
   "inning": "진행 중인 이닝 (예: 3회초, 5회말. 경기전/종료면 빈문자열)",
   "awayScore": ${team1}의 현재 점수 (숫자만, 없으면 0),
   "homeScore": ${team2}의 현재 점수 (숫자만, 없으면 0),
@@ -1049,7 +1065,7 @@ ${textContent}
                     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
                     const data = JSON.parse(text);
                     
-                    if (data.gameStatus) document.getElementById(`status-${matchId}`).value = data.gameStatus;
+                    if (data.gameStatus) document.getElementById(`status-${matchId}`).value = normalizeAdminGameStatus(data.gameStatus);
                     if (data.inning !== undefined) document.getElementById(`inning-${matchId}`).value = data.inning;
                     if (data.awayScore !== undefined) document.getElementById(`away-score-${matchId}`).value = data.awayScore;
                     if (data.homeScore !== undefined) document.getElementById(`home-score-${matchId}`).value = data.homeScore;
@@ -1368,7 +1384,7 @@ ${textContent}
                     allGames.push(matchData);
                     liveDataStore[matchId] = matchData;
 
-                    if (status !== '종료' && status !== '우취') {
+                    if (status !== '종료' && !isCanceledStatus(status)) {
                         allDone = false;
                     } else if (status === '종료') {
                         anyGameEnded = true;
@@ -1385,7 +1401,7 @@ ${textContent}
                         games: allGames
                     });
 
-                    // 모두 종료/우취 시 과거 경기록으로도 최종 반영
+                    // 모든 경기가 종료 또는 취소 상태면 과거 경기록으로도 최종 반영
                     if (allDone) {
                         await db.collection("games").doc(selectedDate).set({
                             date: selectedDate,
